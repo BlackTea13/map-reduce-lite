@@ -1,5 +1,5 @@
 use clap::Parser;
-use tokio::{signal, sync::mpsc};
+use tokio::{signal};
 use tonic::transport::Server;
 
 mod core;

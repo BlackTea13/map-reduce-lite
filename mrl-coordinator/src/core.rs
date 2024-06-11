@@ -1,5 +1,5 @@
 use tokio::sync::Mutex;
-use tonic::{transport::Server, Request, Response, Status};
+use tonic::{Request, Response, Status};
 
 pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
 use coordinator::{JobsRequest, JobsResponse, WorkerJoinRequest, WorkerJoinResponse};

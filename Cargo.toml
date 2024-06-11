@@ -1,42 +1,9 @@
-[package]
-name = "mrlite"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-anyhow = "1.0.86"
-bytes = "1.6.0"
-clap = { version = "4.5.4", features = ["derive"] }
-fnv = "1.0.7"
-serde = { version = "1.0.140", features = ["derive"] }
-log = "0.4.17"
-uuid = { version = "1.1.2", features = ["v4"] }
-glob = "0.3.1"
-dashmap = { version = "5.5.3", features = ["rayon"] }
-itertools = "0.13.0"
-serde_json = "1.0.117"
-tokio = { version = "1", features = ["full"] }
-prost = "0.12.6"
-tonic = "0.11.0"
-
-
-[[bin]]
-name = "mrl-ctl"
-path = "src/app/mrl-ctl.rs"
-
-[[bin]]
-name = "mrl-worker"
-path = "src/app/mrl-worker.rs"
-
-[[bin]]
-name = "mrl-coordinator"
-path = "src/app/mrl-coordinator.rs"
-
-[[bin]]
-name = "standalone"
-path = "src/app/standalone.rs"
-
-[build-dependencies]
-tonic-build = "0.11"
+[workspace]
+members = [
+    "common",
+    "mrl-coordinator",
+    "mrl-worker",
+    "mrl-ctl",
+    "standalone",
+    "workload"
+]

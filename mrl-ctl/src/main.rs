@@ -1,13 +1,11 @@
-use std::io::stdin;
-
-use clap::{command, Parser};
+use clap::{Parser};
 use coordinator::{coordinator_client::CoordinatorClient, JobsRequest};
 
 pub mod coordinator {
     tonic::include_proto!("coordinator");
 }
 
-use mrlite::dist::{job::Job, Args, Commands};
+use common::{Args, Commands};
 
 /// Parse and user command.
 /// Can be 1 of 3:

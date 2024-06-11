@@ -1,11 +1,11 @@
 //! A MapReduce-compatible implementation of `grep`.
 //!
 
-use crate::*;
 use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
+use common::{KeyValue, MapOutput};
 
 #[derive(Parser, Debug, Serialize, Deserialize)]
 #[clap(no_binary_name = true)]

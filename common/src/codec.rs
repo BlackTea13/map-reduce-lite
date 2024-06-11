@@ -6,7 +6,7 @@
 //! # Examples
 //!
 //! Write byte packets into a writer, then retrieve them using a reader:
-//! ```
+//!
 //! # use map_reduce::codec::{LengthDelimitedWriter, LengthDelimitedReader};
 //! # use bytes::Bytes;
 //! let mut writer = LengthDelimitedWriter::new();
@@ -20,10 +20,10 @@
 //! assert_eq!(reader.next(), Some(Bytes::from("hello")));
 //! assert_eq!(reader.next(), Some(Bytes::from("world")));
 //! assert_eq!(reader.next(), None);
-//! ```
+//!
 //!
 //! Since the reader implements [`Iterator`], you can use it in a `for` loop:
-//! ```
+//!
 //! # use map_reduce::codec::{LengthDelimitedWriter, LengthDelimitedReader};
 //! # use bytes::Bytes;
 //! # let mut writer = LengthDelimitedWriter::new();
@@ -34,10 +34,11 @@
 //! for packet in reader {
 //!   // Do something with the packet.
 //! }
-//! ```
+//!
+//!
 //!
 //! You can also use the many utility functions that operate on iterators:
-//! ```
+//!
 //! # use map_reduce::codec::{LengthDelimitedWriter, LengthDelimitedReader};
 //! # use bytes::Bytes;
 //! # let mut writer = LengthDelimitedWriter::new();
@@ -47,7 +48,7 @@
 //! let mut reader = LengthDelimitedReader::new(buf);
 //! // Collect all the packets in the reader into a Vec.
 //! let messages = reader.collect::<Vec<_>>();
-//! ```
+//!
 //!
 //!
 
@@ -77,13 +78,13 @@ impl LengthDelimitedWriter {
     ///
     /// # Example
     ///
-    /// ```
+    ///
     /// # use map_reduce::codec::LengthDelimitedWriter;
     /// # use bytes::Bytes;
     /// let mut writer = LengthDelimitedWriter::new();
     /// let packet = Bytes::from("hello world\n");
     /// writer.send(packet);
-    /// ```
+    ///
     pub fn send(&mut self, b: Bytes) {
         assert!(b.len() <= u32::MAX as usize);
 
@@ -97,7 +98,7 @@ impl LengthDelimitedWriter {
     ///
     /// # Example
     ///
-    /// ```
+    ///
     /// # use map_reduce::codec::LengthDelimitedWriter;
     /// # use bytes::{Bytes, BytesMut};
     /// let mut writer = LengthDelimitedWriter::new();
@@ -106,7 +107,7 @@ impl LengthDelimitedWriter {
     /// let buf: BytesMut = writer.finish();
     /// // If you want to convert BytesMut to Bytes, use freeze:
     /// let buf: Bytes = buf.freeze();
-    /// ```
+    ///
     pub fn finish(self) -> BytesMut {
         self.buf
     }

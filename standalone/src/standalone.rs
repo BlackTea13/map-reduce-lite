@@ -1,8 +1,9 @@
 use anyhow::*;
 use bytes::Bytes;
 use clap::Parser;
-use mrlite::standalone::{Args, Commands};
-use mrlite::*;
+use common::Workload;
+use crate::{Args, Commands};
+use crate::*;
 use standalone::{
     engine::{perform_map, perform_reduce},
     Job,

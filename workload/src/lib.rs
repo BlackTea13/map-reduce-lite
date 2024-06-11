@@ -3,7 +3,8 @@
 //! # Example
 //!
 //! To get the word count application:
-//! ```
+//!
+//!
 //! # use anyhow::Result;
 //! // This is the correct import to use if you are outside the crate:
 //! use mrlite::workload;
@@ -12,10 +13,10 @@
 //! # fn main() -> Result<()> {
 //! let wc = workload::named("wc")?;
 //! # Ok(())
-//! # }
-//! ```
+//! #
+//!
 
-use crate::Workload;
+use common::Workload;
 use anyhow::{bail, Result};
 
 pub mod grep;

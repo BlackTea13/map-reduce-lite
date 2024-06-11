@@ -1,5 +1,3 @@
-//! A fault-tolerant MapReduce (lite) system.
-//!
 //! Users can specify map and reduce tasks, and then distribute
 //! those tasks to workers running on a MapReduce cluster. For simplicity, data
 //! is kept on an S3-compatible system, unlike Hadoop or GFS.
@@ -8,10 +6,8 @@ use bytes::Bytes;
 use std::hash::Hasher;
 
 pub mod codec;
-pub mod dist;
-pub mod standalone;
 pub mod utils;
-pub mod workload;
+pub mod job;
 
 /////////////////////////////////////////////////////////////////////////////
 // MapReduce application types
@@ -104,4 +100,43 @@ pub fn ihash(key: &[u8]) -> u32 {
     hasher.write(key);
     let value = hasher.finish() & 0x7fffffff;
     u32::try_from(value).expect("Failed to compute ihash of value")
+}
+
+
+/////////////////////////////////////////////////////////////////
+
+use clap::{Parser, Subcommand};
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+pub struct Args {
+    #[clap(subcommand)]
+    pub command: Commands,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Commands {
+    /// List all tasks which have been submitted to the system and their statuses.
+    Jobs,
+    /// Display the health status of the system, showing how many workers are registered,
+    /// what the coordinator is doing and what the workers are doing.
+    Status,
+    /// Submit a job to the cluster
+    Submit {
+        /// Glob spec for the input files
+        #[arg(short, long)]
+        input: String,
+
+        // Name of the workload
+        #[arg(short, long)]
+        workload: String,
+
+        /// Output directory
+        #[arg(short, long)]
+        output: String,
+
+        /// Auxiliary arguments to pass to the MapReduce application.
+        #[clap(value_parser, last = true)]
+        args: Vec<String>,
+    },
 }

@@ -2,8 +2,8 @@
 //! degree of each vertex in a graph, given a list of edges.
 //!
 
-use crate::utils::string_from_bytes;
-use crate::*;
+use common::utils::string_from_bytes;
+use common::{KeyValue, MapOutput};
 use anyhow::{anyhow, Result};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 

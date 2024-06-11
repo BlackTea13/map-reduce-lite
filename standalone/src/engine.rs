@@ -3,11 +3,12 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use glob::glob;
 use itertools::Itertools;
-use standalone::Job;
+use common::{KeyValue, ihash, Workload};
 use std::{
     fs::File,
     io::{Read, Write},
 };
+
 
 use crate::*;
 

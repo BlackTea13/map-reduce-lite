@@ -1,0 +1,14 @@
+[package]
+name = "mrl-ctl"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.7", features = ["derive"] }
+tonic = "0.11.0"
+tokio = "1.38.0"
+common = { path = "../common"}
+prost = "0.12.6"
+
+[build-dependencies]
+tonic-build = "0.11.0"

@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 
-pub mod job;
+mod engine;
+pub mod standalone;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -11,11 +12,6 @@ pub struct Args {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// List all tasks which have been submitted to the system and their statuses.
-    Jobs,
-    /// Display the health status of the system, showing how many workers are registered,
-    /// what the coordinator is doing and what the workers are doing.
-    Status,
     /// Submit a job to the cluster
     Submit {
         /// Glob spec for the input files
@@ -34,4 +30,11 @@ pub enum Commands {
         #[clap(value_parser, last = true)]
         args: Vec<String>,
     },
+}
+
+pub struct Job {
+    pub input: String,
+    pub workload: String,
+    pub output: String,
+    pub args: Vec<String>,
 }

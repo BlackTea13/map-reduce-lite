@@ -1,9 +1,9 @@
 //! A MapReduce-compatible implementation of word count.
 //!
 
-use crate::*;
 use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use common::{KeyValue, MapOutput};
 
 pub fn map(kv: KeyValue, _aux: Bytes) -> MapOutput {
     let s = String::from_utf8(kv.value.as_ref().into())?;

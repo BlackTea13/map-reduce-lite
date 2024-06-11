@@ -3,7 +3,7 @@ use tonic::{transport::Server, Request, Response, Status};
 use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
 use coordinator::{JobsRequest, JobsResponse};
 
-use mrlite::dist::job::Job;
+use common::job::Job;
 
 use std::collections::VecDeque;
 

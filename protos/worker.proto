@@ -1,0 +1,18 @@
+syntax = "proto3";
+package worker;
+
+message WorkRequest {
+  string input_file = 1;
+  string output_file = 2;
+  string workload = 3;
+}
+
+message WorkResponse {
+  // Received.
+  bool success = 1;
+}
+
+service Worker {
+  rpc RequestWork (WorkRequest) returns (WorkResponse);
+}
+

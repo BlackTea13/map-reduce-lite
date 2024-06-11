@@ -1,13 +1,28 @@
 syntax = "proto3";
 package coordinator;
 
-service Coordinator {
-  // Simply send back the request message.
-  rpc Jobs (JobsRequest) returns (JobsResponse);
-}
-
 message JobsRequest {}
 
 message JobsResponse {
   uint32 job_count = 1;  
 }
+
+// Worker asking to join workforce.
+message WorkerJoinRequest {}
+message WorkerJoinResponse {
+  bool success = 1;  
+}
+
+// Worker request for work.
+message WorkerTaskRequest {}
+message WorkerTaskResponse {
+  // Queued I guess?
+  bool success = 1;
+}
+
+service Coordinator {
+  // Simply send back the request message.
+  rpc Jobs (JobsRequest) returns (JobsResponse);
+  rpc WorkerJoin (WorkerJoinRequest) returns (WorkerJoinResponse);
+}
+

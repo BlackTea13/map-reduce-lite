@@ -1,48 +1,59 @@
-use tonic::{transport::Server, Request, Response, Status};
+mod args;
+use args::Args;
 
-use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
-use coordinator::{JobsRequest, JobsResponse};
+mod core;
+use core::{MRCoordinator, CoordinatorServer};
 
-use common::job::Job;
+mod minio;
+mod jobs;
 
-use std::collections::VecDeque;
+use aws_sdk_s3 as s3;
+use clap::Parser;
+use tonic::{transport::Server};
 
-pub mod coordinator {
-    tonic::include_proto!("coordinator");
-}
+async fn show_buckets(client: &s3::Client) -> Result<(), Box<dyn std::error::Error>> {
+    let resp = client.list_buckets().send().await?;
+    let buckets = resp.buckets();
+    let num_buckets = buckets.len();
 
-#[derive(Debug, Default)]
-pub struct MRCoordinator {
-    jobs: VecDeque<Job>,
-}
-
-#[tonic::async_trait]
-impl Coordinator for MRCoordinator {
-    async fn jobs(
-        &self,
-        request: Request<JobsRequest>,
-    ) -> Result<Response<JobsResponse>, Status> {
-        println!("Got a request from {:?}", request.remote_addr());
-
-        let reply = JobsResponse {
-            job_count: self.jobs.len() as u32,
-        };
-        Ok(Response::new(reply))
+    println!("Bucket names:");
+    for bucket in buckets {
+        println!(" {}", bucket.name().unwrap_or_default());
     }
-}
 
-// Note: Move this out later.
-const PORT: u16 = 8030;
+    println!("Found {} buckets in all regions.", num_buckets);
+
+    Ok(())
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = format!("[::1]:{}", PORT).parse().unwrap();
-    let greeter = MRCoordinator::default();
+    // Retrieve server configuration from command line.
+    // Note: There are default values for EACH argument.
+    let args = Args::parse();
 
+    // Configure address.
+    let addr = format!("[::1]:{}", args.port).parse().unwrap();
     println!("CoordinatorServer listening on {}", addr);
 
+    let coordinator = MRCoordinator::default();
+
+    // Create minio client config from cli arguments and retrieve minio client.
+    let minio_client_config = minio::ClientConfig {
+        access_key_id: args.access_key_id,
+        secret_access_key: args.secret_access_key,
+        region: args.region,
+        url: args.minio_url,
+    };
+    let client = minio::Client::from_conf(minio_client_config);
+
+    // Remove me. This is just for ensuring that the connection works.
+    if let Err(e) = show_buckets(&client.client).await {
+        dbg!(e);
+    }
+
     Server::builder()
-        .add_service(CoordinatorServer::new(greeter))
+        .add_service(CoordinatorServer::new(coordinator))
         .serve(addr)
         .await?;
 

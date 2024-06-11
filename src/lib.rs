@@ -10,6 +10,7 @@ use std::hash::Hasher;
 pub mod codec;
 pub mod standalone;
 pub mod utils;
+pub mod dist;
 pub mod workload;
 
 /////////////////////////////////////////////////////////////////////////////

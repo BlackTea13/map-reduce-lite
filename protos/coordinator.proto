@@ -1,0 +1,15 @@
+syntax = "proto3";
+package coordinator;
+
+service Coordinator {
+  // Simply send back the request message.
+  rpc Echo (MessageRequest) returns (MessageResponse);
+}
+
+message MessageRequest {
+  string message = 1;
+}
+
+message MessageResponse {
+  string message = 1;  
+}

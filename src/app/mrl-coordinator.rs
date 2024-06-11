@@ -1,16 +1,15 @@
 use tonic::{transport::Server, Request, Response, Status};
 
 use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
-use coordinator::{MessageRequest, MessageResponse};
+use coordinator::{JobsRequest, JobsResponse};
 
-use dist::Job;
+use mrlite::dist::job::Job;
 
 use std::collections::VecDeque;
 
 pub mod coordinator {
     tonic::include_proto!("coordinator");
 }
-
 
 #[derive(Debug, Default)]
 pub struct MRCoordinator {
@@ -19,14 +18,14 @@ pub struct MRCoordinator {
 
 #[tonic::async_trait]
 impl Coordinator for MRCoordinator {
-    async fn echo(
+    async fn jobs(
         &self,
-        request: Request<MessageRequest>,
-    ) -> Result<Response<MessageResponse>, Status> {
+        request: Request<JobsRequest>,
+    ) -> Result<Response<JobsResponse>, Status> {
         println!("Got a request from {:?}", request.remote_addr());
 
-        let reply = MessageResponse {
-            message: format!("Hello {}!", request.into_inner().message),
+        let reply = JobsResponse {
+            job_count: self.jobs.len() as u32,
         };
         Ok(Response::new(reply))
     }

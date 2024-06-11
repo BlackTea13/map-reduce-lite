@@ -8,9 +8,9 @@ use bytes::Bytes;
 use std::hash::Hasher;
 
 pub mod codec;
+pub mod dist;
 pub mod standalone;
 pub mod utils;
-pub mod dist;
 pub mod workload;
 
 /////////////////////////////////////////////////////////////////////////////

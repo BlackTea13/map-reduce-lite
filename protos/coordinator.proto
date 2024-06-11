@@ -3,13 +3,11 @@ package coordinator;
 
 service Coordinator {
   // Simply send back the request message.
-  rpc Echo (MessageRequest) returns (MessageResponse);
+  rpc Jobs (JobsRequest) returns (JobsResponse);
 }
 
-message MessageRequest {
-  string message = 1;
-}
+message JobsRequest {}
 
-message MessageResponse {
-  string message = 1;  
+message JobsResponse {
+  uint32 job_count = 1;  
 }

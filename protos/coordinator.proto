@@ -8,7 +8,9 @@ message JobsResponse {
 }
 
 // Worker asking to join workforce.
-message WorkerJoinRequest {}
+message WorkerJoinRequest {
+  uint32 port = 1;
+}
 message WorkerJoinResponse {
   bool success = 1;  
 }

@@ -2,14 +2,16 @@ mod args;
 use args::Args;
 
 mod core;
-use core::{MRCoordinator, CoordinatorServer};
+use core::{CoordinatorServer, MRCoordinator};
 
-mod minio;
 mod jobs;
+mod minio;
+
+mod worker_info;
 
 use aws_sdk_s3 as s3;
 use clap::Parser;
-use tonic::{transport::Server};
+use tonic::transport::Server;
 
 async fn show_buckets(client: &s3::Client) -> Result<(), Box<dyn std::error::Error>> {
     let resp = client.list_buckets().send().await?;

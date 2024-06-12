@@ -22,7 +22,9 @@ message WorkerLeaveRequest {
 message WorkerLeaveResponse {}
 
 // Worker request for work.
-message WorkerTaskRequest {}
+message WorkerTaskRequest {
+  int32 worker_id = 1;
+}
 message WorkerTaskResponse {
   // Queued I guess?
   bool success = 1;
@@ -33,5 +35,6 @@ service Coordinator {
   rpc Jobs (JobsRequest) returns (JobsResponse);
   rpc WorkerJoin (WorkerJoinRequest) returns (WorkerJoinResponse);
   rpc WorkerLeave (WorkerLeaveRequest) returns (WorkerLeaveResponse);
+  rpc WorkerTask (WorkerTaskRequest) returns (WorkerTaskResponse);
 }
 

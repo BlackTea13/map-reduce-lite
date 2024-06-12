@@ -4,7 +4,8 @@ package worker;
 message WorkRequest {
   string input_file = 1;
   string output_file = 2;
-  string workload = 3;
+  string workload = 3; // name of the workload
+  string work_type = 4;
 }
 
 message WorkResponse {

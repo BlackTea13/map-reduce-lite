@@ -1499,6 +1499,7 @@ dependencies = [
 name = "mrl-worker"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "clap",
  "prost",
  "tokio",

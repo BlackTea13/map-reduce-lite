@@ -4,7 +4,7 @@ use tonic::{Request, Response, Status};
 pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
 use coordinator::{
     JobsRequest, JobsResponse, WorkerJoinRequest, WorkerJoinResponse, WorkerLeaveRequest,
-    WorkerLeaveResponse,
+    WorkerLeaveResponse, WorkerTaskRequest, WorkerTaskResponse
 };
 pub mod coordinator {
     tonic::include_proto!("coordinator");
@@ -22,13 +22,25 @@ use crate::{
 
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
 
-use crate::worker_info::WorkerInfo;
+use crate::worker_info::{WorkerID, WorkerInfo};
 
 #[derive(Debug, Default)]
 pub struct MRCoordinator {
     jobs: VecDeque<jobs::Job>,
     workers: Arc<Mutex<Vec<WorkerInfo>>>,
     worker_vendor: Arc<Mutex<WorkerIDVendor>>,
+    // free workers 
+    free_workers: Arc<Mutex<Vec<WorkerID>>>
+}
+
+impl MRCoordinator {
+
+    async fn add_free_worker(&self, worker_id: WorkerID) {
+        let mut free_workers = self.free_workers.lock().await;
+        free_workers.push(worker_id);
+    }
+
+
 }
 
 #[tonic::async_trait]
@@ -65,9 +77,9 @@ impl Coordinator for MRCoordinator {
             if index < workers.len() {
                 workers[index] = worker_info;
             } else {
-                workers.push(worker_info);
+                workers.push(worker_info);   
             }
-
+            let _ = self.add_free_worker(worker_id).await;
             worker_id
         };
 
@@ -112,4 +124,20 @@ impl Coordinator for MRCoordinator {
         let reply = WorkerLeaveResponse {};
         Ok(Response::new(reply))
     }
+
+    async fn worker_task(&self, request: Request<WorkerTaskRequest>) -> Result<Response<WorkerTaskResponse>, Status> {
+        let worker_id = request.into_inner().worker_id;
+
+        let _ = self.add_free_worker(worker_id).await;
+
+        // println!("Got a request from {:?}", request.remote_addr());
+
+        let reply = WorkerTaskResponse { success: true};
+        Ok(Response::new(reply))
+
+    }
+
+
+
+
 }

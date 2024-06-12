@@ -12,8 +12,14 @@ message WorkerJoinRequest {
   uint32 port = 1;
 }
 message WorkerJoinResponse {
-  bool success = 1;  
+  int32 worker_id = 1;  
 }
+
+// Worker asking to leave workforce.
+message WorkerLeaveRequest {
+  int32 worker_id = 1;
+}
+message WorkerLeaveResponse {}
 
 // Worker request for work.
 message WorkerTaskRequest {}
@@ -26,5 +32,6 @@ service Coordinator {
   // Simply send back the request message.
   rpc Jobs (JobsRequest) returns (JobsResponse);
   rpc WorkerJoin (WorkerJoinRequest) returns (WorkerJoinResponse);
+  rpc WorkerLeave (WorkerLeaveRequest) returns (WorkerLeaveResponse);
 }
 

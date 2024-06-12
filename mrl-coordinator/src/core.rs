@@ -2,7 +2,10 @@ use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
 
 pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
-use coordinator::{JobsRequest, JobsResponse, WorkerJoinRequest, WorkerJoinResponse};
+use coordinator::{
+    JobsRequest, JobsResponse, WorkerJoinRequest, WorkerJoinResponse, WorkerLeaveRequest,
+    WorkerLeaveResponse,
+};
 pub mod coordinator {
     tonic::include_proto!("coordinator");
 }
@@ -12,7 +15,10 @@ pub mod worker {
 }
 pub use worker::{worker_client::WorkerClient, AckRequest};
 
-use crate::jobs;
+use crate::{
+    jobs,
+    worker_info::{Worker, WorkerIDVendor},
+};
 
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
 
@@ -22,6 +28,7 @@ use crate::worker_info::WorkerInfo;
 pub struct MRCoordinator {
     jobs: VecDeque<jobs::Job>,
     workers: Arc<Mutex<Vec<WorkerInfo>>>,
+    worker_vendor: Arc<Mutex<WorkerIDVendor>>,
 }
 
 #[tonic::async_trait]
@@ -40,27 +47,69 @@ impl Coordinator for MRCoordinator {
         &self,
         request: Request<WorkerJoinRequest>,
     ) -> Result<Response<WorkerJoinResponse>, Status> {
+        // Construct address for worker's gRPC server.
         let worker_ip = request.remote_addr().unwrap().ip();
         let addr = SocketAddr::new(worker_ip, request.into_inner().port as u16);
 
-        {
+        // Create a new worker, generate and assign an ID to it.
+        let worker_id = {
+            let mut worker_vendor = self.worker_vendor.lock().await;
             let mut workers = self.workers.lock().await;
-            workers.push(WorkerInfo::new(addr));
-        }
+
+            let worker_id = worker_vendor.create_worker();
+            let worker_info = WorkerInfo::new(worker_id, addr);
+
+            // If the index is valid, then we are reusing
+            // an ID, else we are adding a new worker ID entry.
+            let index = Worker::get_worker_index(worker_id) as usize;
+            if index < workers.len() {
+                workers[index] = worker_info;
+            } else {
+                workers.push(worker_info);
+            }
+
+            worker_id
+        };
 
         // Server ack.
         let mut client = WorkerClient::connect(format!("http://{}", addr).to_string())
             .await
             .map_err(|_| Status::unknown("Unable to connect to client"))?;
         let request = tonic::Request::new(AckRequest {});
+
         let resp = client.ack(request).await;
         if resp.is_err() {
             return Err(Status::unknown("Worker did not acknowledge connection."));
         } else {
-            println!("Worker joined.");
+            println!("Worker joined (ID={})", Worker::get_worker_index(worker_id));
         }
 
-        let reply = WorkerJoinResponse { success: true };
+        // Send the generated worker ID to be saved
+        // on the worker, so they know how they are
+        // identified.
+        let reply = WorkerJoinResponse { worker_id };
+        Ok(Response::new(reply))
+    }
+
+    /// Worker requests to leave the workforce.
+    async fn worker_leave(
+        &self,
+        request: Request<WorkerLeaveRequest>,
+    ) -> Result<Response<WorkerLeaveResponse>, Status> {
+        let worker_id = request.into_inner().worker_id;
+
+        {
+            // Only invalid the ID. No need to touch WorkerInfo.
+            let mut worker_vendor = self.worker_vendor.lock().await;
+            worker_vendor.delete_worker(worker_id);
+        };
+
+        println!(
+            "Worker exitted (ID={})",
+            Worker::get_worker_index(worker_id)
+        );
+
+        let reply = WorkerLeaveResponse {};
         Ok(Response::new(reply))
     }
 }

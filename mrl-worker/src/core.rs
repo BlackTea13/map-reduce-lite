@@ -1,7 +1,9 @@
 //
 // Import gRPC stubs/definitions.
 //
-pub use coordinator::{coordinator_client::CoordinatorClient, WorkerJoinRequest};
+pub use coordinator::{
+    coordinator_client::CoordinatorClient, WorkerJoinRequest, WorkerLeaveRequest,
+};
 pub mod coordinator {
     tonic::include_proto!("coordinator");
 }

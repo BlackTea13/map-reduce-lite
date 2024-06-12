@@ -1,9 +1,9 @@
 use clap::Parser;
-use tokio::{signal};
+use tokio::signal;
 use tonic::transport::Server;
 
 mod core;
-use core::{CoordinatorClient, MRWorker, WorkerJoinRequest, WorkerServer};
+use core::{CoordinatorClient, MRWorker, WorkerJoinRequest, WorkerLeaveRequest, WorkerServer};
 
 mod args;
 use args::Args;
@@ -35,16 +35,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     let response = client.worker_join(request).await?;
 
-    let success = response.into_inner().success;
+    let worker_id = response.into_inner().worker_id;
 
-    if success {
-        // Start gRPC server, accepting request from server.
-        println!("Worker registered...");
-    }
+    println!("Worker registered (ID={})", worker_id & 0xFFFF);
 
     match signal::ctrl_c().await {
         Ok(()) => {
             println!("Server exited...");
+            let leave_request = tonic::Request::new(WorkerLeaveRequest { worker_id });
+            client.worker_leave(leave_request).await?;
             Ok(())
         }
         Err(err) => {

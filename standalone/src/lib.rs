@@ -1,7 +1,6 @@
 use clap::{Parser, Subcommand};
 
-mod engine;
-pub mod standalone;
+pub mod engine;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

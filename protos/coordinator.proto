@@ -22,9 +22,29 @@ message WorkerLeaveRequest {
 message WorkerLeaveResponse {}
 
 // Worker request for work.
-message WorkerTaskRequest {}
+message WorkerTaskRequest {
+  int32 worker_id = 1;
+}
 message WorkerTaskResponse {
   // Queued I guess?
+  bool success = 1;
+}
+
+message StartTaskRequest {
+  string input_files = 1;
+  string output_files = 2;
+  string workload = 3;
+  repeated string aux = 4;
+}
+
+message StartTaskResponse {
+  bool success = 1;
+}
+
+message WorkerDoneRequest {
+  int32 worker_id = 1;
+}
+message WorkerDoneResponse {
   bool success = 1;
 }
 
@@ -33,5 +53,8 @@ service Coordinator {
   rpc Jobs (JobsRequest) returns (JobsResponse);
   rpc WorkerJoin (WorkerJoinRequest) returns (WorkerJoinResponse);
   rpc WorkerLeave (WorkerLeaveRequest) returns (WorkerLeaveResponse);
+  rpc WorkerTask (WorkerTaskRequest) returns (WorkerTaskResponse);
+  rpc StartTask (StartTaskRequest) returns (StartTaskResponse);
+  rpc WorkerDone (WorkerDoneRequest) returns (WorkerDoneResponse);
 }
 

@@ -1,4 +1,7 @@
+use crate::core::WorkerClient;
 use std::{fmt::Pointer, net::SocketAddr};
+use tonic::transport::Channel;
+use tonic::Status;
 
 pub type WorkerID = i32;
 pub type WorkerVersion = u16;
@@ -96,13 +99,38 @@ impl WorkerIDVendor {
 }
 
 #[derive(Debug)]
+pub enum WorkerState {
+    Free,
+    Mapping,
+    Reducing,
+}
+
+#[derive(Debug)]
 pub struct WorkerInfo {
+    /// Unique ID for each worker.
     pub id: WorkerID,
-    pub addr: SocketAddr,
+
+    /// The state of the worker.
+    pub state: WorkerState,
+
+    // Worker Client for gRPC Communication
+    pub client: WorkerClient<Channel>,
 }
 
 impl WorkerInfo {
-    pub fn new(id: WorkerID, addr: SocketAddr) -> Self {
-        Self { addr, id }
+    pub async fn new(id: WorkerID, addr: SocketAddr) -> Result<Self, Status> {
+        let client = WorkerClient::connect(format!("http://{}", addr).to_string())
+            .await
+            .map_err(|_| Status::unknown("Unable to connect to client"))?;
+        Ok(Self {
+            client,
+            id,
+            state: WorkerState::Free, // By default, workers start off free.
+        })
+    }
+
+    /// Set worker state.
+    pub fn set_state(&mut self, new_state: WorkerState) {
+        self.state = new_state;
     }
 }

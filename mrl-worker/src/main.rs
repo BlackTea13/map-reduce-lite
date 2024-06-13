@@ -8,6 +8,8 @@ use core::{CoordinatorClient, MRWorker, WorkerJoinRequest, WorkerLeaveRequest, W
 mod args;
 use args::Args;
 
+mod workload;
+
 async fn start_server(port: u16) {
     tokio::task::spawn(async move {
         let worker = MRWorker::default();

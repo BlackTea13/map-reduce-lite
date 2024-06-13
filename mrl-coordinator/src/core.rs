@@ -4,7 +4,7 @@ use tonic::{Request, Response, Status};
 pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
 use coordinator::{
     JobsRequest, JobsResponse, WorkerJoinRequest, WorkerJoinResponse, WorkerLeaveRequest,
-    WorkerLeaveResponse, WorkerTaskRequest, WorkerTaskResponse
+    WorkerLeaveResponse, WorkerTaskRequest, WorkerTaskResponse,
 };
 pub mod coordinator {
     tonic::include_proto!("coordinator");
@@ -17,7 +17,8 @@ pub use worker::{worker_client::WorkerClient, AckRequest};
 
 use crate::{
     jobs,
-    worker_info::{Worker, WorkerIDVendor},
+    worker_info::{Worker, WorkerIDVendor, WorkerState},
+    worker_registry::WorkerRegistry,
 };
 
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
@@ -27,20 +28,18 @@ use crate::worker_info::{WorkerID, WorkerInfo};
 #[derive(Debug, Default)]
 pub struct MRCoordinator {
     jobs: VecDeque<jobs::Job>,
-    workers: Arc<Mutex<Vec<WorkerInfo>>>,
-    worker_vendor: Arc<Mutex<WorkerIDVendor>>,
-    // free workers 
-    free_workers: Arc<Mutex<Vec<WorkerID>>>
+    worker_registry: Arc<Mutex<WorkerRegistry>>,
 }
 
 impl MRCoordinator {
-
-    async fn add_free_worker(&self, worker_id: WorkerID) {
-        let mut free_workers = self.free_workers.lock().await;
-        free_workers.push(worker_id);
+    async fn get_registry(&self) -> tokio::sync::MutexGuard<'_, WorkerRegistry> {
+        self.worker_registry.lock().await
     }
 
-
+    async fn add_free_worker(&self, worker_id: WorkerID) {
+        let mut registry = self.get_registry().await;
+        registry.set_worker_state(worker_id, WorkerState::Free);
+    }
 }
 
 #[tonic::async_trait]
@@ -65,22 +64,8 @@ impl Coordinator for MRCoordinator {
 
         // Create a new worker, generate and assign an ID to it.
         let worker_id = {
-            let mut worker_vendor = self.worker_vendor.lock().await;
-            let mut workers = self.workers.lock().await;
-
-            let worker_id = worker_vendor.create_worker();
-            let worker_info = WorkerInfo::new(worker_id, addr);
-
-            // If the index is valid, then we are reusing
-            // an ID, else we are adding a new worker ID entry.
-            let index = Worker::get_worker_index(worker_id) as usize;
-            if index < workers.len() {
-                workers[index] = worker_info;
-            } else {
-                workers.push(worker_info);   
-            }
-            let _ = self.add_free_worker(worker_id).await;
-            worker_id
+            let mut registry = self.get_registry().await;
+            registry.register_worker(addr)
         };
 
         // Server ack.
@@ -112,8 +97,8 @@ impl Coordinator for MRCoordinator {
 
         {
             // Only invalid the ID. No need to touch WorkerInfo.
-            let mut worker_vendor = self.worker_vendor.lock().await;
-            worker_vendor.delete_worker(worker_id);
+            let mut registry = self.get_registry().await;
+            registry.delete_worker(worker_id);
         };
 
         println!(
@@ -125,19 +110,17 @@ impl Coordinator for MRCoordinator {
         Ok(Response::new(reply))
     }
 
-    async fn worker_task(&self, request: Request<WorkerTaskRequest>) -> Result<Response<WorkerTaskResponse>, Status> {
+    async fn worker_task(
+        &self,
+        request: Request<WorkerTaskRequest>,
+    ) -> Result<Response<WorkerTaskResponse>, Status> {
         let worker_id = request.into_inner().worker_id;
 
         let _ = self.add_free_worker(worker_id).await;
 
         // println!("Got a request from {:?}", request.remote_addr());
 
-        let reply = WorkerTaskResponse { success: true};
+        let reply = WorkerTaskResponse { success: true };
         Ok(Response::new(reply))
-
     }
-
-
-
-
 }

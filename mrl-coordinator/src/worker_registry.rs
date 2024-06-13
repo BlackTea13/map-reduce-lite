@@ -26,7 +26,7 @@ impl WorkerRegistry {
     /// Add worker information into the worker list.
     ///
     /// Note: If the index indicated by the ID is within range of the
-    /// existin gworker list then we are reusing a slot, otherwise we
+    /// existing worker list then we are reusing a slot, otherwise we
     /// are allocating a new spot for the worker.
     fn add_worker_info(&mut self, worker_info: WorkerInfo) {
         let workers_list = &mut self.worker_list;
@@ -56,7 +56,7 @@ impl WorkerRegistry {
     /// Remove worker from the registry
     ///
     /// Note: The entry still remains in the list, only
-    /// the worker ID is invalidated, and won't be until
+    /// the worker ID is invalidated, and won't be valid until
     /// another worker reuses the ID's index.
     pub fn delete_worker(&mut self, worker_id: WorkerID) {
         let vendor = &mut self.worker_vendor;

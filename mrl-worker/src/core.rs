@@ -16,18 +16,15 @@ pub mod worker {
 
 use tonic::{Request, Response, Status};
 
-use crate::workload::{self, map, reduce, KeyValue};
+use crate::workload::{map, reduce, KeyValue};
 
 use bytes::Bytes;
-
 
 #[derive(Debug, Default)]
 pub struct MRWorker {}
 
 #[tonic::async_trait]
 impl Worker for MRWorker {
-
-
     async fn request_work(
         &self,
         request: Request<WorkRequest>,
@@ -46,7 +43,7 @@ impl Worker for MRWorker {
         match work_request.work_type.as_bytes() {
             b"map" => map(input_kv, Bytes::from(work_request.workload)),
             b"reduce" => reduce(key, Bytes::from(work_request.workload)),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         };
 
         let reply = WorkResponse { success: true };

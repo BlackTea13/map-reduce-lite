@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use crate::worker_info::*;
 
 /// Registry for workers.
+#[derive(Debug, Default)]
 pub struct WorkerRegistry {
     /// Internal vendor for managing worker ID.
     worker_vendor: WorkerIDVendor,
@@ -50,6 +51,25 @@ impl WorkerRegistry {
         self.add_worker_info(worker_info);
 
         worker_id
+    }
+
+    /// Remove worker from the registry
+    ///
+    /// Note: The entry still remains in the list, only
+    /// the worker ID is invalidated, and won't be until
+    /// another worker reuses the ID's index.
+    pub fn delete_worker(&mut self, worker_id: WorkerID) {
+        let vendor = &mut self.worker_vendor;
+
+        vendor.delete_worker(worker_id);
+    }
+
+    /// Set worker state.
+    pub fn set_worker_state(&mut self, worker_id: WorkerID, new_state: WorkerState) {
+        let index = Worker::get_worker_index(worker_id) as usize;
+        let worker = &mut self.worker_list[index];
+
+        worker.state = new_state;
     }
 
     /// Retrieve free workers.

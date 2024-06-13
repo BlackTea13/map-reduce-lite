@@ -43,8 +43,14 @@ impl Worker for MRWorker {
         };
 
         match WorkType::from_i32(work_request.work_type) {
-            Some(WorkType::Map) => map(input_kv, Bytes::from(work_request.workload)),
-            Some(WorkType::Reduce) => reduce(key, Bytes::from(work_request.workload)),
+            Some(WorkType::Map) => {
+                dbg!("Performing map");
+                map(input_kv, Bytes::from(work_request.workload))
+            },
+            Some(WorkType::Reduce) => {
+                dbg!("Performing reduce");
+                reduce(key, Bytes::from(work_request.workload))
+            },
             _ => unimplemented!()
         };
 

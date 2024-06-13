@@ -54,8 +54,13 @@ impl MRCoordinator {
         aux: Vec<String>,
     ) {
         let mut registry = self.get_registry().await;
+        let work_state = match work_type {
+            WorkType::Map => WorkerState::Mapping,
+            WorkType::Reduce => WorkerState::Reducing,
+            _ => unreachable!()
+        };
+        registry.set_worker_state(worker_id, work_state);
         if let Some(worker) = registry.get_worker_mut(worker_id) {
-            let client = &worker.client;
             let request = Request::new(ReceivedWorkRequest {
                 input_file: input_file,
                 output_file: output_file,
@@ -63,7 +68,6 @@ impl MRCoordinator {
                 work_type: work_type as i32,
                 aux,
             });
-            // let response = client.worker_join(request).await?;
         }
     }
 }
@@ -152,33 +156,36 @@ impl Coordinator for MRCoordinator {
         &self,
         request: Request<StartTaskRequest>,
     ) -> Result<Response<StartTaskResponse>, Status> {
+
         let start_task_request = request.into_inner();
+
+
 
         let input_files = start_task_request.input_files;
         let output_files = start_task_request.output_files;
         let workload = start_task_request.workload;
         let aux = start_task_request.aux;
 
-        let no_splits = 5;
+        let no_splits = 1;
 
-        {
+        let splitted_free_workers = {
             let mut registry = self.get_registry().await;
             let free_workers = registry.get_free_workers();
-            let splitted_free_workers = free_workers[..no_splits].to_vec();
+            free_workers[..no_splits].to_vec()
+        };
 
-            for worker_id in splitted_free_workers {
-                registry.set_worker_state(worker_id, WorkerState::Mapping);
-                let _ = self
-                    .assign_work(
-                        worker_id,
-                        String::from("input_files"),
-                        String::from("output_files"),
-                        WorkType::Map,
-                        String::from("workload"),
-                        Vec::new(),
-                    )
-                    .await;
-            }
+        for worker_id in splitted_free_workers {
+
+            let _ = self
+                .assign_work(
+                    worker_id,
+                    String::from("input_files"),
+                    String::from("output_files"),
+                    WorkType::Map,
+                    String::from("workload"),
+                    Vec::new(),
+                )
+                .await;
         }
 
         let reply = StartTaskResponse { success: true };

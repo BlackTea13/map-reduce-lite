@@ -1,14 +1,20 @@
 syntax = "proto3";
 package worker;
 
-message WorkRequest {
+enum WorkType {
+  MAP = 0;
+  REDUCE = 1;
+}
+
+message ReceivedWorkRequest {
   string input_file = 1;
   string output_file = 2;
   string workload = 3; // name of the workload
-  string work_type = 4;
+  WorkType work_type = 4;
+  repeated string aux = 5;
 }
 
-message WorkResponse {
+message ReceivedWorkResponse {
   // Received.
   bool success = 1;
 }
@@ -17,7 +23,7 @@ message AckRequest {}
 message AckResponse {}
 
 service Worker {
-  rpc RequestWork (WorkRequest) returns (WorkResponse);
+  rpc ReceivedWork (ReceivedWorkRequest) returns (ReceivedWorkResponse);
   rpc Ack (AckRequest) returns (AckResponse);
 }
 

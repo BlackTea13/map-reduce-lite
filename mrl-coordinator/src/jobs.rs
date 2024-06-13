@@ -11,4 +11,3 @@ pub enum JobState {
 pub struct Job {
     state: JobState,
 }
-

@@ -9,7 +9,7 @@ pub mod coordinator {
 }
 
 pub use worker::worker_server::{Worker, WorkerServer};
-pub use worker::{AckRequest, AckResponse, WorkRequest, WorkResponse};
+pub use worker::{AckRequest, AckResponse, ReceivedWorkRequest, ReceivedWorkResponse, WorkType};
 pub mod worker {
     tonic::include_proto!("worker");
 }
@@ -25,10 +25,12 @@ pub struct MRWorker {}
 
 #[tonic::async_trait]
 impl Worker for MRWorker {
-    async fn request_work(
+
+
+    async fn received_work(
         &self,
-        request: Request<WorkRequest>,
-    ) -> Result<Response<WorkResponse>, Status> {
+        request: Request<ReceivedWorkRequest>,
+    ) -> Result<Response<ReceivedWorkResponse>, Status> {
         // println!("Got a work request {:?}", request.into_inner());
 
         let work_request = request.into_inner();
@@ -40,13 +42,13 @@ impl Worker for MRWorker {
             value: buf,
         };
 
-        match work_request.work_type.as_bytes() {
-            b"map" => map(input_kv, Bytes::from(work_request.workload)),
-            b"reduce" => reduce(key, Bytes::from(work_request.workload)),
-            _ => unimplemented!(),
+        match WorkType::from_i32(work_request.work_type) {
+            Some(WorkType::Map) => map(input_kv, Bytes::from(work_request.workload)),
+            Some(WorkType::Reduce) => reduce(key, Bytes::from(work_request.workload)),
+            _ => unimplemented!()
         };
 
-        let reply = WorkResponse { success: true };
+        let reply = ReceivedWorkResponse { success: true };
         Ok(Response::new(reply))
     }
 

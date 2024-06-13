@@ -96,13 +96,35 @@ impl WorkerIDVendor {
 }
 
 #[derive(Debug)]
+pub enum WorkerState {
+    Free,
+    Mapping,
+    Reducing,
+}
+
+#[derive(Debug)]
 pub struct WorkerInfo {
+    /// Unique ID for each worker.
     pub id: WorkerID,
+
+    /// Address for communicating with the worker's gRPC server.
     pub addr: SocketAddr,
+
+    /// The state of the worker.
+    pub state: WorkerState,
 }
 
 impl WorkerInfo {
     pub fn new(id: WorkerID, addr: SocketAddr) -> Self {
-        Self { addr, id }
+        Self {
+            addr,
+            id,
+            state: WorkerState::Free, // By default, workers start off free.
+        }
+    }
+
+    /// Set worker state.
+    pub fn set_state(&mut self, new_state: WorkerState) {
+        self.state = new_state;
     }
 }

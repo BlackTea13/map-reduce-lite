@@ -8,6 +8,7 @@ mod jobs;
 mod minio;
 
 mod worker_info;
+mod worker_registry;
 
 use aws_sdk_s3 as s3;
 use clap::Parser;

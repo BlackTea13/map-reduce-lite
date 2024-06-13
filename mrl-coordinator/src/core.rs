@@ -5,7 +5,7 @@ use tonic::{Request, Response, Status};
 
 pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
 use coordinator::*;
-pub use worker::{worker_client::WorkerClient, AckRequest, WorkRequest, WorkType};
+pub use worker::{worker_client::WorkerClient, AckRequest, ReceivedWorkRequest, WorkType};
 
 use crate::worker_info::WorkerID;
 use crate::{
@@ -56,7 +56,7 @@ impl MRCoordinator {
         let mut registry = self.get_registry().await;
         if let Some(worker) = registry.get_worker_mut(worker_id) {
             let client = &worker.client;
-            let request = Request::new(WorkRequest {
+            let request = Request::new(ReceivedWorkRequest {
                 input_file: input_file,
                 output_file: output_file,
                 workload: workload,

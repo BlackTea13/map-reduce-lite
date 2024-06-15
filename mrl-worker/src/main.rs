@@ -1,8 +1,7 @@
 use clap::Parser;
-use log::{info, Level};
 use tokio::signal;
 use tonic::transport::Server;
-use tracing::error;
+use tracing::{info, error};
 
 mod core;
 use core::{CoordinatorClient, MRWorker, WorkerJoinRequest, WorkerLeaveRequest, WorkerServer};

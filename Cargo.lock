@@ -1485,7 +1485,6 @@ dependencies = [
  "bytes",
  "clap",
  "common",
- "log",
  "prost",
  "tokio",
  "tonic",
@@ -1512,7 +1511,6 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "clap",
- "log",
  "prost",
  "tokio",
  "tonic",

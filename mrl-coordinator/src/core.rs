@@ -1,7 +1,7 @@
-use log::info;
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
+use tracing::info;
 
 pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
 use coordinator::*;

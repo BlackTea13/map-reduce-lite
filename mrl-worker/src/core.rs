@@ -25,8 +25,6 @@ pub struct MRWorker {}
 
 #[tonic::async_trait]
 impl Worker for MRWorker {
-
-
     async fn received_work(
         &self,
         request: Request<ReceivedWorkRequest>,
@@ -46,12 +44,12 @@ impl Worker for MRWorker {
             Some(WorkType::Map) => {
                 dbg!("Performing map");
                 map(input_kv, Bytes::from(work_request.workload))
-            },
+            }
             Some(WorkType::Reduce) => {
                 dbg!("Performing reduce");
                 reduce(key, Bytes::from(work_request.workload))
-            },
-            _ => unimplemented!()
+            }
+            _ => unimplemented!(),
         };
 
         let reply = ReceivedWorkResponse { success: true };

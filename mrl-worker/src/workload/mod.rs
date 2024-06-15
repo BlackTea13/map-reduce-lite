@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use tracing::debug;
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct KeyValue {
@@ -45,10 +46,9 @@ impl KeyValue {
 }
 
 pub fn map(kv: KeyValue, aux: Bytes) {
-    println!("map ran!")
+    debug!("map ran!")
 }
 
-pub fn reduce(key: Bytes,
-    aux: Bytes) {
-    println!("reduce ran!")
+pub fn reduce(key: Bytes, aux: Bytes) {
+    debug!("reduce ran!")
 }

@@ -13,19 +13,22 @@ mod worker_registry;
 use aws_sdk_s3 as s3;
 use clap::Parser;
 use tonic::transport::Server;
-use log::info;
+use tracing::{debug, info, warn};
 
 async fn show_buckets(client: &s3::Client) -> Result<(), Box<dyn std::error::Error>> {
     let resp = client.list_buckets().send().await?;
     let buckets = resp.buckets();
     let num_buckets = buckets.len();
 
-    info!("Bucket names:");
+    let mut bucket_names = "".to_owned();
     for bucket in buckets {
-        info!(" {}", bucket.name().unwrap_or_default());
+        let bucket_name = bucket.name().unwrap_or_default().to_owned();
+        bucket_names.push_str(&bucket_name);
+        bucket_names.push_str(", ");
     }
 
     info!("Found {} buckets in all regions.", num_buckets);
+    info!("Bucket names: {}", bucket_names);
 
     Ok(())
 }
@@ -34,6 +37,8 @@ async fn show_buckets(client: &s3::Client) -> Result<(), Box<dyn std::error::Err
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Retrieve server configuration from command line.
     // Note: There are default values for EACH argument.
+    tracing_subscriber::fmt::init();
+
     let args = Args::parse();
 
     // Configure address.

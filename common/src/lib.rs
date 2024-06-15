@@ -6,8 +6,8 @@ use bytes::Bytes;
 use std::hash::Hasher;
 
 pub mod codec;
-pub mod utils;
 pub mod job;
+pub mod utils;
 
 /////////////////////////////////////////////////////////////////////////////
 // MapReduce application types
@@ -101,7 +101,6 @@ pub fn ihash(key: &[u8]) -> u32 {
     let value = hasher.finish() & 0x7fffffff;
     u32::try_from(value).expect("Failed to compute ihash of value")
 }
-
 
 /////////////////////////////////////////////////////////////////
 

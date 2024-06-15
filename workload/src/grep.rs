@@ -4,8 +4,8 @@
 use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use clap::Parser;
-use serde::{Deserialize, Serialize};
 use common::{KeyValue, MapOutput};
+use serde::{Deserialize, Serialize};
 
 #[derive(Parser, Debug, Serialize, Deserialize)]
 #[clap(no_binary_name = true)]

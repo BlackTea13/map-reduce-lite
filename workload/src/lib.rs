@@ -16,8 +16,8 @@
 //! #
 //!
 
-use common::Workload;
 use anyhow::{bail, Result};
+use common::Workload;
 
 pub mod grep;
 pub mod vertex_degree;

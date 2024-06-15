@@ -2,10 +2,10 @@
 //! degree of each vertex in a graph, given a list of edges.
 //!
 
-use common::utils::string_from_bytes;
-use common::{KeyValue, MapOutput};
 use anyhow::{anyhow, Result};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use common::utils::string_from_bytes;
+use common::{KeyValue, MapOutput};
 
 fn parse_line(line: &str) -> Result<(u64, u64)> {
     let mut iter = line.split_whitespace().take(2);

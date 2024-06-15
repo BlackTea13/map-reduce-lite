@@ -2,11 +2,11 @@ use anyhow::*;
 use bytes::Bytes;
 use clap::Parser;
 use common::Workload;
-use standalone::{Args, Commands};
 use standalone::{
     engine::{perform_map, perform_reduce},
     Job,
 };
+use standalone::{Args, Commands};
 
 fn parse_args() -> Job {
     let args = Args::parse();

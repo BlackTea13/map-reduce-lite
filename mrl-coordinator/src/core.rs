@@ -1,7 +1,7 @@
+use log::info;
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
-use log::info;
 
 pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
 use coordinator::*;
@@ -57,7 +57,7 @@ impl MRCoordinator {
         let work_state = match work_type {
             WorkType::Map => WorkerState::Mapping,
             WorkType::Reduce => WorkerState::Reducing,
-            _ => unreachable!()
+            _ => unreachable!(),
         };
         registry.set_worker_state(worker_id, work_state);
         if let Some(worker) = registry.get_worker_mut(worker_id) {
@@ -131,10 +131,7 @@ impl Coordinator for MRCoordinator {
             registry.delete_worker(worker_id);
         };
 
-        info!(
-            "Worker exited (ID={})",
-            Worker::get_worker_index(worker_id)
-        );
+        info!("Worker exited (ID={})", Worker::get_worker_index(worker_id));
 
         let reply = WorkerLeaveResponse {};
         Ok(Response::new(reply))
@@ -156,10 +153,7 @@ impl Coordinator for MRCoordinator {
         &self,
         request: Request<StartTaskRequest>,
     ) -> Result<Response<StartTaskResponse>, Status> {
-
         let start_task_request = request.into_inner();
-
-
 
         let input_files = start_task_request.input_files;
         let output_files = start_task_request.output_files;
@@ -175,7 +169,6 @@ impl Coordinator for MRCoordinator {
         };
 
         for worker_id in splitted_free_workers {
-
             let _ = self
                 .assign_work(
                     worker_id,

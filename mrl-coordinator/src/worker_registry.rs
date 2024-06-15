@@ -52,7 +52,10 @@ impl WorkerRegistry {
     }
 
     /// Add worker to the registry and return the worker handle ID.
-    pub async fn register_worker(&mut self, worker_address: SocketAddr) -> Result<WorkerID, Status> {
+    pub async fn register_worker(
+        &mut self,
+        worker_address: SocketAddr,
+    ) -> Result<WorkerID, Status> {
         // Generate worker information (id + address + state).
         let worker_info = self.generate_worker_info(worker_address).await?;
         let worker_id = worker_info.id;

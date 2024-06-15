@@ -1,7 +1,9 @@
+use std::time::Duration;
 /// Helper functions and structures for dealing with minio.
 use aws_sdk_s3 as s3;
 use aws_sdk_s3::primitives::ByteStream;
 use anyhow::Error;
+use aws_sdk_s3::presigning::PresigningConfig;
 use bytes::Bytes;
 
 pub struct ClientConfig {
@@ -78,5 +80,28 @@ impl Client {
     pub async fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
         self.client.delete_bucket().bucket(bucket).send().await?;
         Ok(())
+    }
+
+    pub async fn presigned_get_uri(&self, bucket: &str, key: &str, expires_in: u64) -> Result<String, Error> {
+        let expires_in = Duration::from_secs(expires_in);
+        let presigned_request = self.client
+            .get_object()
+            .bucket(bucket)
+            .key(key)
+            .presigned(PresigningConfig::expires_in(expires_in)?)
+            .await?;
+        Ok(presigned_request.uri().to_string())
+    }
+
+    pub async fn presigned_put_uri(&self, bucket: &str, key: &str, data: Bytes,  expires_in: u64) -> Result<String, Error> {
+        let expires_in = Duration::from_secs(expires_in);
+        let presigned_request = self.client
+            .put_object()
+            .bucket(bucket)
+            .key(key)
+            .body(ByteStream::from(data))
+            .presigned(PresigningConfig::expires_in(expires_in)?)
+            .await?;
+        Ok(presigned_request.uri().to_string())
     }
 }

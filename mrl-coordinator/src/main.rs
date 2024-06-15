@@ -13,18 +13,19 @@ mod worker_registry;
 use aws_sdk_s3 as s3;
 use clap::Parser;
 use tonic::transport::Server;
+use log::info;
 
 async fn show_buckets(client: &s3::Client) -> Result<(), Box<dyn std::error::Error>> {
     let resp = client.list_buckets().send().await?;
     let buckets = resp.buckets();
     let num_buckets = buckets.len();
 
-    println!("Bucket names:");
+    info!("Bucket names:");
     for bucket in buckets {
-        println!(" {}", bucket.name().unwrap_or_default());
+        info!(" {}", bucket.name().unwrap_or_default());
     }
 
-    println!("Found {} buckets in all regions.", num_buckets);
+    info!("Found {} buckets in all regions.", num_buckets);
 
     Ok(())
 }
@@ -37,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Configure address.
     let addr = format!("[::1]:{}", args.port).parse().unwrap();
-    println!("CoordinatorServer listening on {}", addr);
+    info!("CoordinatorServer listening on {}", addr);
 
     let coordinator = MRCoordinator::default();
 

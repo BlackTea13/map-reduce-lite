@@ -1473,10 +1473,13 @@ dependencies = [
 name = "mrl-coordinator"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "aws-config",
  "aws-sdk-s3",
+ "bytes",
  "clap",
  "common",
+ "log",
  "prost",
  "tokio",
  "tonic",

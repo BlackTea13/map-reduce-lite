@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
-
 use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
+use log::info;
 
 pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
 use coordinator::*;
@@ -75,7 +75,7 @@ impl MRCoordinator {
 #[tonic::async_trait]
 impl Coordinator for MRCoordinator {
     async fn jobs(&self, request: Request<JobsRequest>) -> Result<Response<JobsResponse>, Status> {
-        println!("Got a request from {:?}", request.remote_addr());
+        info!("Got a request from {:?}", request.remote_addr());
 
         let reply = JobsResponse {
             job_count: self.jobs.len() as u32,
@@ -108,7 +108,7 @@ impl Coordinator for MRCoordinator {
         if resp.is_err() {
             return Err(Status::unknown("Worker did not acknowledge connection."));
         } else {
-            println!("Worker joined (ID={})", Worker::get_worker_index(worker_id));
+            info!("Worker joined (ID={})", Worker::get_worker_index(worker_id));
         }
 
         // Send the generated worker ID to be saved
@@ -131,8 +131,8 @@ impl Coordinator for MRCoordinator {
             registry.delete_worker(worker_id);
         };
 
-        println!(
-            "Worker exitted (ID={})",
+        info!(
+            "Worker exited (ID={})",
             Worker::get_worker_index(worker_id)
         );
 

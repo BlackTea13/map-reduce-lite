@@ -1,5 +1,8 @@
 /// Helper functions and structures for dealing with minio.
 use aws_sdk_s3 as s3;
+use aws_sdk_s3::primitives::ByteStream;
+use anyhow::Error;
+use bytes::Bytes;
 
 pub struct ClientConfig {
     /// id
@@ -39,5 +42,41 @@ impl Client {
         Self {
             client: s3::Client::from_conf(conf),
         }
+    }
+
+    pub async fn create_bucket(&self, bucket: &str) -> Result<(), Error> {
+        self.client.create_bucket().bucket(bucket).send().await?;
+        Ok(())
+    }
+
+    pub async fn get_object(&self, bucket: &str, key: &str) -> Result<Bytes, Error> {
+        let data = self
+            .client
+            .get_object()
+            .bucket(bucket)
+            .key(key)
+            .send()
+            .await?
+            .body
+            .collect()
+            .await?
+            .into_bytes();
+        Ok(data)
+    }
+
+    pub async fn put_object(&self, bucket: &str, key: &str, data: Bytes) -> Result<(), Error> {
+        self.client
+            .put_object()
+            .bucket(bucket)
+            .key(key)
+            .body(ByteStream::from(data))
+            .send()
+            .await?;
+        Ok(())
+    }
+
+    pub async fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
+        self.client.delete_bucket().bucket(bucket).send().await?;
+        Ok(())
     }
 }

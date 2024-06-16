@@ -4,12 +4,15 @@ use tonic::transport::Server;
 use tracing::{info, error};
 
 mod core;
+
 use core::{CoordinatorClient, MRWorker, WorkerJoinRequest, WorkerLeaveRequest, WorkerServer};
 
 mod args;
+
 use args::Args;
 
 mod map;
+mod minio;
 
 async fn start_server(port: u16) {
     tokio::task::spawn(async move {

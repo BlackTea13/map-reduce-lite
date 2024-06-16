@@ -4,12 +4,14 @@
 pub use coordinator::{
     coordinator_client::CoordinatorClient, WorkerJoinRequest, WorkerLeaveRequest,
 };
+
 pub mod coordinator {
     tonic::include_proto!("coordinator");
 }
 
 pub use worker::worker_server::{Worker, WorkerServer};
 pub use worker::{AckRequest, AckResponse, ReceivedWorkRequest, MapJobRequest, ReduceJobRequest, ReceivedWorkResponse};
+
 pub mod worker {
     tonic::include_proto!("worker");
 }
@@ -26,20 +28,20 @@ use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceM
 
 use crate::map;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 enum WorkerState {
-    Idle,
-    InProgress
+    #[default] Idle,
+    InProgress,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct MRWorker {
     state: WorkerState,
 }
 
 impl MRWorker {
     fn new() -> MRWorker {
-        MRWorker {state: WorkerState::Idle}
+        MRWorker { state: WorkerState::Idle }
     }
 }
 
@@ -53,12 +55,12 @@ impl Worker for MRWorker {
 
         // we accept the work only if we are free
         match self.state {
-            WorkerState::Idle => {},
-            WorkerState::InProgress => return Ok(Response::new(ReceivedWorkResponse{ success: false})),
+            WorkerState::Idle => {}
+            WorkerState::InProgress => return Ok(Response::new(ReceivedWorkResponse { success: false })),
         };
 
         let work_request = request.into_inner();
-        match work_request.job_message.unwrap() {
+        let _ = match work_request.job_message.unwrap() {
             MapMessage(msg) => map::perform_map(msg),
             ReduceMessage(msg) => todo!(),
         }.await;

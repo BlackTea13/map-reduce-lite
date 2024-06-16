@@ -20,6 +20,7 @@ pub struct ClientConfig {
     pub url: String,
 }
 
+#[derive(Debug)]
 pub struct Client {
     pub client: s3::Client,
 }

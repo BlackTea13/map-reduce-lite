@@ -5,7 +5,7 @@ use tracing::info;
 
 pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
 use coordinator::*;
-pub use worker::{worker_client::WorkerClient, AckRequest, ReceivedWorkRequest, WorkType};
+pub use worker::{worker_client::WorkerClient, AckRequest, ReceivedWorkRequest};
 
 use crate::worker_info::WorkerID;
 use crate::{
@@ -13,6 +13,9 @@ use crate::{
     worker_info::{Worker, WorkerState},
     worker_registry::WorkerRegistry,
 };
+use crate::core::worker::MapJobRequest;
+use crate::core::worker::received_work_request::JobMessage;
+use crate::minio::{Client, ClientConfig};
 
 pub mod coordinator {
     tonic::include_proto!("coordinator");
@@ -28,13 +31,28 @@ struct Submit {
     output: String,
     args: Vec<String>,
 }
-#[derive(Debug, Default)]
+
+enum WorkType {
+    Map,
+    Reduce,
+}
+
+#[derive(Debug)]
 pub struct MRCoordinator {
+    pub s3_client: Client,
     jobs: VecDeque<jobs::Job>,
     worker_registry: Arc<Mutex<WorkerRegistry>>,
 }
 
 impl MRCoordinator {
+    pub(crate) fn new(s3_config: ClientConfig) -> Self {
+        MRCoordinator {
+            s3_client: Client::from_conf(s3_config),
+            jobs: VecDeque::new(),
+            worker_registry: Arc::new(Mutex::new(WorkerRegistry::default())),
+        }
+    }
+
     async fn get_registry(&self) -> tokio::sync::MutexGuard<'_, WorkerRegistry> {
         self.worker_registry.lock().await
     }
@@ -44,6 +62,7 @@ impl MRCoordinator {
         registry.set_worker_state(worker_id, WorkerState::Free);
     }
 
+    // TODO: partition input/output for mapper and reducers.
     async fn assign_work(
         &self,
         worker_id: WorkerID,
@@ -57,17 +76,24 @@ impl MRCoordinator {
         let work_state = match work_type {
             WorkType::Map => WorkerState::Mapping,
             WorkType::Reduce => WorkerState::Reducing,
-            _ => unreachable!(),
         };
         registry.set_worker_state(worker_id, work_state);
+
+        // TODO: send Map work for now, someone handle this when for reduce
         if let Some(worker) = registry.get_worker_mut(worker_id) {
-            let request = Request::new(ReceivedWorkRequest {
-                input_file: input_file,
-                output_file: output_file,
+            let map_message = MapJobRequest {
+                input_files: input_file,
                 workload: workload,
-                work_type: work_type as i32,
-                aux,
+                presigned_url: self.s3_client.presigned_get_uri("myjob", "testcases/books/yang.txt", 50000).await.unwrap(),
+                aux: aux,
+            };
+
+            let message = JobMessage::MapMessage(map_message);
+            let request = Request::new(ReceivedWorkRequest {
+                job_message: Some(message)
             });
+
+            let response = worker.client.received_work(request).await.unwrap();
         }
     }
 }
@@ -193,3 +219,4 @@ impl Coordinator for MRCoordinator {
         Ok(Response::new(reply))
     }
 }
+

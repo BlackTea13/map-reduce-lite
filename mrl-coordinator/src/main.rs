@@ -1,7 +1,10 @@
 mod args;
+
+use std::cmp::min;
 use args::Args;
 
 mod core;
+
 use core::{CoordinatorServer, MRCoordinator};
 
 mod jobs;
@@ -45,7 +48,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = format!("[::1]:{}", args.port).parse().unwrap();
     info!("CoordinatorServer listening on {}", addr);
 
-    let coordinator = MRCoordinator::default();
 
     // Create minio client config from cli arguments and retrieve minio client.
     let minio_client_config = minio::ClientConfig {
@@ -54,10 +56,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         region: args.region,
         url: args.minio_url,
     };
-    let client = minio::Client::from_conf(minio_client_config);
+
+    let coordinator = MRCoordinator::new(minio_client_config);
 
     // Remove me. This is just for ensuring that the connection works.
-    if let Err(e) = show_buckets(&client.client).await {
+    if let Err(e) = show_buckets(&coordinator.s3_client.client).await {
         dbg!(e);
     }
 

@@ -9,19 +9,39 @@ pub mod coordinator {
 }
 
 pub use worker::worker_server::{Worker, WorkerServer};
-pub use worker::{AckRequest, AckResponse, ReceivedWorkRequest, ReceivedWorkResponse, WorkType};
+pub use worker::{AckRequest, AckResponse, ReceivedWorkRequest, MapJobRequest, ReduceJobRequest, ReceivedWorkResponse};
 pub mod worker {
     tonic::include_proto!("worker");
 }
 
 use tonic::{Request, Response, Status};
 
-use crate::workload::{map, reduce, KeyValue};
+use workload::{vertex_degree, wc, grep};
+use common::{KeyValue, Workload};
 
 use bytes::Bytes;
+use tracing::debug;
+use common::job::JobState;
+use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceMessage};
 
-#[derive(Debug, Default)]
-pub struct MRWorker {}
+use crate::map;
+
+#[derive(Debug)]
+enum WorkerState {
+    Idle,
+    InProgress
+}
+
+#[derive(Debug)]
+pub struct MRWorker {
+    state: WorkerState,
+}
+
+impl MRWorker {
+    fn new() -> MRWorker {
+        MRWorker {state: WorkerState::Idle}
+    }
+}
 
 #[tonic::async_trait]
 impl Worker for MRWorker {
@@ -29,28 +49,19 @@ impl Worker for MRWorker {
         &self,
         request: Request<ReceivedWorkRequest>,
     ) -> Result<Response<ReceivedWorkResponse>, Status> {
-        // println!("Got a work request {:?}", request.into_inner());
+        debug!("Received a work request");
+
+        // we accept the work only if we are free
+        match self.state {
+            WorkerState::Idle => {},
+            WorkerState::InProgress => return Ok(Response::new(ReceivedWorkResponse{ success: false})),
+        };
 
         let work_request = request.into_inner();
-
-        let buf = Bytes::from("appy");
-        let key = Bytes::from("filename");
-        let input_kv = KeyValue {
-            key: key.clone(),
-            value: buf,
-        };
-
-        match WorkType::from_i32(work_request.work_type) {
-            Some(WorkType::Map) => {
-                dbg!("Performing map");
-                map(input_kv, Bytes::from(work_request.workload))
-            }
-            Some(WorkType::Reduce) => {
-                dbg!("Performing reduce");
-                reduce(key, Bytes::from(work_request.workload))
-            }
-            _ => unimplemented!(),
-        };
+        match work_request.job_message.unwrap() {
+            MapMessage(msg) => map::perform_map(msg),
+            ReduceMessage(msg) => todo!(),
+        }.await;
 
         let reply = ReceivedWorkResponse { success: true };
         Ok(Response::new(reply))

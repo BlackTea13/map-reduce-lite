@@ -9,7 +9,7 @@ use core::{CoordinatorClient, MRWorker, WorkerJoinRequest, WorkerLeaveRequest, W
 mod args;
 use args::Args;
 
-mod workload;
+mod map;
 
 async fn start_server(port: u16) {
     tokio::task::spawn(async move {

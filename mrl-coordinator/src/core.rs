@@ -89,11 +89,6 @@ impl MRCoordinator {
             let map_message = MapJobRequest {
                 input_files: input_file,
                 workload,
-                presigned_url: self
-                    .s3_client
-                    .presigned_get_uri("myjob", "testcases/books/yang.txt", 50000)
-                    .await
-                    .unwrap(),
                 aux,
             };
 
@@ -111,7 +106,7 @@ impl MRCoordinator {
         let number_of_workers = registry.len();
         let workers = registry.get_workers();
 
-        let workers_registered = format!("Workers Registered: {}", number_of_workers);
+        let workers_registered = format!("Workers Registered {}", number_of_workers);
 
         let mut data = vec![workers_registered];
 

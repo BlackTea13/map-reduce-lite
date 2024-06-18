@@ -1,8 +1,8 @@
 use clap::Parser;
+use common::minio::{Client, ClientConfig};
 use tokio::signal;
 use tonic::transport::Server;
-use tracing::{info, error};
-use common::minio::{Client, ClientConfig};
+use tracing::{error, info};
 
 mod core;
 
@@ -53,11 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         region: args.region,
         url: args.minio_url,
     };
-
-    let s3_client = Client::from_conf(minio_client_config);
-
-    s3_client.download_object("cool", "sexgod", "./".to_string()).await?;
-    s3_client.upload_file("cool", "sexgod_ascension", "./anish.txt".to_string()).await?;
+    let _s3_client = Client::from_conf(minio_client_config);
 
     match signal::ctrl_c().await {
         Ok(()) => {

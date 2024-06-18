@@ -24,7 +24,9 @@ message ReceivedWorkResponse {
   bool success = 1;
 }
 
-message AckRequest {}
+message AckRequest {
+  uint32 worker_id = 1;
+}
 message AckResponse {}
 
 service Worker {

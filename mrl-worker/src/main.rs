@@ -1,7 +1,9 @@
 use clap::Parser;
 use common::minio::{Client, ClientConfig};
 use tokio::signal;
-use tonic::transport::Server;
+use tokio::sync::oneshot;
+use tokio::sync::oneshot::Receiver;
+use tonic::transport::{Channel, Server};
 use tracing::{error, info};
 
 mod core;
@@ -14,16 +16,20 @@ use args::Args;
 
 mod map;
 
-async fn start_server(port: u16) {
-    tokio::task::spawn(async move {
-        let worker = MRWorker::default();
-        let addr = format!("[::1]:{}", port).parse().unwrap();
-        info!("Worker server listening on {}", addr);
+async fn start_server(port: u16, address: String) {
+    let addr = format!("[::1]:{}", port).parse().unwrap();
 
-        let _ = Server::builder()
-            .add_service(WorkerServer::new(worker))
+    tokio::task::spawn(async move {
+        let worker = MRWorker::new(address);
+
+        let svc = WorkerServer::new(worker);
+
+        Server::builder()
+            .add_service(svc) // Add the service to the server
             .serve(addr)
-            .await;
+            .await
+            .unwrap();
+
     });
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await
 }
@@ -34,16 +40,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let args = Args::parse();
 
-    // Start server as background task.
-    start_server(args.port).await;
+    let address_clone = args.address.clone();
 
-    let mut client = CoordinatorClient::connect(args.address).await?;
+    start_server(args.port, address_clone).await;
+
+
+    let mut client = CoordinatorClient::connect(args.address.clone()).await?;
     let request = tonic::Request::new(WorkerJoinRequest {
         port: args.port as u32,
     });
     let response = client.worker_join(request).await?;
 
     let worker_id = response.into_inner().worker_id;
+
 
     info!("Worker registered (ID={})", worker_id & 0xFFFF);
 

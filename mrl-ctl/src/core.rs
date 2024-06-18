@@ -1,10 +1,7 @@
-use clap::Command;
-use common::Workload;
 //
 // Import gRPC stubs/definitions.
 //
-use crate::args::Commands;
-use crate::args::Commands::Submit;
+use crate::core::coordinator::StatusRequest;
 use coordinator::{coordinator_client::CoordinatorClient, JobsRequest, StartTaskRequest};
 
 pub mod coordinator {
@@ -18,7 +15,19 @@ pub async fn jobs() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = CoordinatorClient::connect(format!("http://[::1]:{}", PORT)).await?;
     let request = tonic::Request::new(JobsRequest {});
     let response = client.jobs(request).await?;
-    dbg!(response.into_inner());
+
+    let data = response.into_inner().data;
+
+    println!("[Jobs]");
+    println!("{}", data[0]);
+    println!("{}", data[1]);
+
+    if data.len() > 2 {
+        println!();
+        for s in &data[2..] {
+            println!("{}", s);
+        }
+    }
 
     Ok(())
 }
@@ -38,6 +47,21 @@ pub async fn submit(
     });
     let response = client.start_task(request).await?;
     dbg!(response.into_inner());
+
+    Ok(())
+}
+
+pub async fn status() -> Result<(), Box<dyn std::error::Error>> {
+    let mut client = CoordinatorClient::connect(format!("http://[::1]:{}", PORT)).await?;
+    let request = tonic::Request::new(StatusRequest {});
+    let response = client.status(request).await?;
+
+    let data = response.into_inner().data;
+
+    println!("[Status]");
+    for s in data {
+        println!("{}", s);
+    }
 
     Ok(())
 }

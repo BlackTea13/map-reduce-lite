@@ -1,5 +1,5 @@
-use crate::core::WorkerClient;
-use std::{fmt::Pointer, net::SocketAddr};
+use crate::core::{WorkType, WorkerClient};
+use std::{net::SocketAddr};
 use tonic::transport::Channel;
 use tonic::Status;
 
@@ -103,6 +103,15 @@ pub enum WorkerState {
     Free,
     Mapping,
     Reducing,
+}
+
+impl WorkerState {
+    pub fn from_work_type(work_type: WorkType) -> WorkerState {
+        match work_type {
+            WorkType::Map => WorkerState::Mapping,
+            WorkType::Reduce => WorkerState::Reducing,
+        }
+    }
 }
 
 #[derive(Debug)]

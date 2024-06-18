@@ -4,7 +4,15 @@ package coordinator;
 message JobsRequest {}
 
 message JobsResponse {
-  uint32 job_count = 1;  
+  // This can be changed, but this is 
+  // the simplest/fastest solution.
+  repeated string data = 1;  
+}
+
+message StatusRequest {}
+
+message StatusResponse {
+  repeated string data = 1;
 }
 
 // Worker asking to join workforce.
@@ -51,6 +59,7 @@ message WorkerDoneResponse {
 service Coordinator {
   // Simply send back the request message.
   rpc Jobs (JobsRequest) returns (JobsResponse);
+  rpc Status (StatusRequest) returns (StatusResponse);
   rpc WorkerJoin (WorkerJoinRequest) returns (WorkerJoinResponse);
   rpc WorkerLeave (WorkerLeaveRequest) returns (WorkerLeaveResponse);
   rpc WorkerTask (WorkerTaskRequest) returns (WorkerTaskResponse);

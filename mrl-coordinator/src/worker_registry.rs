@@ -100,6 +100,18 @@ impl WorkerRegistry {
             .collect()
     }
 
+    /// Size of the worker registry, only counting valid workers.
+    pub fn len(&self) -> usize {
+        self.get_workers().len()
+    }
+
+    pub fn get_workers(&self) -> Vec<&WorkerInfo> {
+        self.worker_list
+            .iter()
+            .filter(|w| self.worker_vendor.worker_valid(w.id))
+            .collect()
+    }
+
     pub fn get_worker(&self, worker_id: WorkerID) -> Option<&WorkerInfo> {
         let index = Worker::get_worker_index(worker_id) as usize;
         self.worker_list.get(index)

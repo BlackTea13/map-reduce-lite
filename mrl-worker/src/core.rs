@@ -10,7 +10,7 @@ pub mod coordinator {
 }
 
 pub use worker::worker_server::{Worker, WorkerServer};
-pub use worker::{AckRequest, AckResponse, ReceivedWorkRequest, MapJobRequest, ReduceJobRequest, ReceivedWorkResponse};
+pub use worker::{AckRequest, AckResponse, ReceivedWorkRequest, MapJobRequest, ReceivedWorkResponse};
 
 pub mod worker {
     tonic::include_proto!("worker");
@@ -18,12 +18,8 @@ pub mod worker {
 
 use tonic::{Request, Response, Status};
 
-use workload::{vertex_degree, wc, grep};
-use common::{KeyValue, Workload};
 
-use bytes::Bytes;
 use tracing::debug;
-use common::job::JobState;
 use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceMessage};
 
 use crate::map;

@@ -1,4 +1,3 @@
-use reqwest;
 use anyhow::{anyhow, Error};
 use bytes::Bytes;
 use tracing::info;

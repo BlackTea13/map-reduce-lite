@@ -1,6 +1,5 @@
 mod args;
 
-use std::cmp::min;
 use args::Args;
 
 mod core;

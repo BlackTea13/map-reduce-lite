@@ -11,7 +11,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Jobs => {
             core::jobs().await?;
         }
-        Commands::Status => todo!(),
+        Commands::Status => core::status().await?,
         Commands::Submit {
             input,
             workload,

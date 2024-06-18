@@ -7,15 +7,16 @@ pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
 use coordinator::*;
 pub use worker::{worker_client::WorkerClient, AckRequest, ReceivedWorkRequest};
 
+use crate::core::worker::received_work_request::JobMessage;
+use crate::core::worker::MapJobRequest;
+use crate::jobs::{Job, JobQueue};
+use crate::minio::{Client, ClientConfig};
 use crate::worker_info::WorkerID;
 use crate::{
     jobs,
     worker_info::{Worker, WorkerState},
     worker_registry::WorkerRegistry,
 };
-use crate::core::worker::MapJobRequest;
-use crate::core::worker::received_work_request::JobMessage;
-use crate::minio::{Client, ClientConfig};
 
 pub mod coordinator {
     tonic::include_proto!("coordinator");
@@ -32,7 +33,7 @@ struct Submit {
     args: Vec<String>,
 }
 
-enum WorkType {
+pub enum WorkType {
     Map,
     Reduce,
 }
@@ -42,19 +43,25 @@ pub struct MRCoordinator {
     pub s3_client: Client,
     jobs: VecDeque<jobs::Job>,
     worker_registry: Arc<Mutex<WorkerRegistry>>,
+    job_queue: Arc<Mutex<JobQueue>>,
 }
 
 impl MRCoordinator {
-    pub(crate) fn new(s3_config: ClientConfig) -> Self {
+    pub fn new(s3_config: ClientConfig) -> Self {
         MRCoordinator {
             s3_client: Client::from_conf(s3_config),
             jobs: VecDeque::new(),
             worker_registry: Arc::new(Mutex::new(WorkerRegistry::default())),
+            job_queue: Arc::new(Mutex::new(JobQueue::new())),
         }
     }
 
     async fn get_registry(&self) -> tokio::sync::MutexGuard<'_, WorkerRegistry> {
         self.worker_registry.lock().await
+    }
+
+    async fn get_job_queue(&self) -> tokio::sync::MutexGuard<'_, JobQueue> {
+        self.job_queue.lock().await
     }
 
     async fn add_free_worker(&self, worker_id: WorkerID) {
@@ -63,7 +70,7 @@ impl MRCoordinator {
     }
 
     // TODO: partition input/output for mapper and reducers.
-    async fn assign_work(
+    async fn _assign_work(
         &self,
         worker_id: WorkerID,
         input_file: String,
@@ -73,38 +80,88 @@ impl MRCoordinator {
         aux: Vec<String>,
     ) {
         let mut registry = self.get_registry().await;
-        let work_state = match work_type {
-            WorkType::Map => WorkerState::Mapping,
-            WorkType::Reduce => WorkerState::Reducing,
-        };
+        let work_state = WorkerState::from_work_type(work_type);
+
         registry.set_worker_state(worker_id, work_state);
 
         // TODO: send Map work for now, someone handle this when for reduce
         if let Some(worker) = registry.get_worker_mut(worker_id) {
             let map_message = MapJobRequest {
                 input_files: input_file,
-                workload: workload,
-                aux: aux,
+                workload,
+                presigned_url: self
+                    .s3_client
+                    .presigned_get_uri("myjob", "testcases/books/yang.txt", 50000)
+                    .await
+                    .unwrap(),
+                aux,
             };
 
             let message = JobMessage::MapMessage(map_message);
             let request = Request::new(ReceivedWorkRequest {
-                job_message: Some(message)
+                job_message: Some(message),
             });
 
             let response = worker.client.received_work(request).await.unwrap();
         }
+    }
+
+    async fn status(&self) -> Vec<String> {
+        let registry = self.get_registry().await;
+        let number_of_workers = registry.len();
+        let workers = registry.get_workers();
+
+        let workers_registered = format!("Workers Registered: {}", number_of_workers);
+
+        let mut data = vec![workers_registered];
+
+        for worker in workers {
+            let index = Worker::get_worker_index(worker.id);
+            let worker_status = format!("Worker (ID={:0>4}) - {:?}", index, worker.state);
+            data.push(worker_status);
+        }
+
+        data
+    }
+
+    /// Returns the jobs of this [`MRCoordinator`].
+    async fn jobs(&self) -> Vec<String> {
+        let job_queue = self.get_job_queue().await;
+
+        let number_of_pending_jobs = job_queue.number_of_jobs_pending();
+        let number_of_processed_jobs = job_queue.number_of_jobs_processed();
+
+        let number_of_processed_jobs = format!("Completed {}", number_of_processed_jobs);
+        let number_of_pending_jobs = format!("Pending   {}", number_of_pending_jobs);
+
+        let mut data = vec![number_of_pending_jobs, number_of_processed_jobs];
+
+        let jobs = job_queue.get_all_jobs();
+
+        for (offset, job) in jobs.iter().enumerate() {
+            let job_status = format!("Job (ID={:0>3}) {:?}", offset, job.get_state());
+            data.push(job_status);
+        }
+
+        data
     }
 }
 
 #[tonic::async_trait]
 impl Coordinator for MRCoordinator {
     async fn jobs(&self, request: Request<JobsRequest>) -> Result<Response<JobsResponse>, Status> {
-        info!("Got a request from {:?}", request.remote_addr());
-
-        let reply = JobsResponse {
-            job_count: self.jobs.len() as u32,
-        };
+        info!("[REQUEST] JOBS from {:?}", request.remote_addr());
+        let data = self.jobs().await;
+        let reply = JobsResponse { data };
+        Ok(Response::new(reply))
+    }
+    async fn status(
+        &self,
+        request: Request<StatusRequest>,
+    ) -> Result<Response<StatusResponse>, Status> {
+        info!("[REQUEST] STATUS from {:?}", request.remote_addr());
+        let data = self.status().await;
+        let reply = StatusResponse { data };
         Ok(Response::new(reply))
     }
 
@@ -174,36 +231,20 @@ impl Coordinator for MRCoordinator {
         Ok(Response::new(reply))
     }
 
+    // NOTE: This name is pretty misleading.
+    //       In reality, this function is just adding the submitted job
+    //       into the job queue and nothing else.
     async fn start_task(
         &self,
         request: Request<StartTaskRequest>,
     ) -> Result<Response<StartTaskResponse>, Status> {
-        let start_task_request = request.into_inner();
+        let task_request = request.into_inner();
+        let job = Job::from_request(task_request);
 
-        let input_files = start_task_request.input_files;
-        let output_files = start_task_request.output_files;
-        let workload = start_task_request.workload;
-        let aux = start_task_request.aux;
-
-        let no_splits = 1;
-
-        let splitted_free_workers = {
-            let mut registry = self.get_registry().await;
-            let free_workers = registry.get_free_workers();
-            free_workers[..no_splits].to_vec()
-        };
-
-        for worker_id in splitted_free_workers {
-            let _ = self
-                .assign_work(
-                    worker_id,
-                    String::from("input_files"),
-                    String::from("output_files"),
-                    WorkType::Map,
-                    String::from("workload"),
-                    Vec::new(),
-                )
-                .await;
+        {
+            // Add job to the queue.
+            let mut job_queue = self.get_job_queue().await;
+            job_queue.push_job(job);
         }
 
         let reply = StartTaskResponse { success: true };
@@ -218,4 +259,3 @@ impl Coordinator for MRCoordinator {
         Ok(Response::new(reply))
     }
 }
-

@@ -9,3 +9,7 @@ anyhow = "1.0.86"
 fnv = "1.0.7"
 prost = "0.12.6"
 clap = { version = "4.5.7", features = ["derive"] }
+tokio = "1.38.0"
+tracing = "0.1.40"
+aws-sdk-s3 = "1.36.0"
+aws-smithy-types = "1.2.0"

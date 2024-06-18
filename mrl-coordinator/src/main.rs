@@ -8,7 +8,6 @@ mod core;
 use core::{CoordinatorServer, MRCoordinator};
 
 mod jobs;
-mod minio;
 
 mod worker_info;
 mod worker_registry;
@@ -16,6 +15,7 @@ mod worker_registry;
 use aws_sdk_s3 as s3;
 use clap::Parser;
 use tonic::transport::Server;
+use common::minio;
 use tracing::{debug, info, warn};
 
 async fn show_buckets(client: &s3::Client) -> Result<(), Box<dyn std::error::Error>> {

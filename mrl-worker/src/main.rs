@@ -2,6 +2,7 @@ use clap::Parser;
 use tokio::signal;
 use tonic::transport::Server;
 use tracing::{info, error};
+use common::minio::{Client, ClientConfig};
 
 mod core;
 
@@ -12,7 +13,6 @@ mod args;
 use args::Args;
 
 mod map;
-mod minio;
 
 async fn start_server(port: u16) {
     tokio::task::spawn(async move {
@@ -46,6 +46,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let worker_id = response.into_inner().worker_id;
 
     info!("Worker registered (ID={})", worker_id & 0xFFFF);
+
+    let minio_client_config = ClientConfig {
+        access_key_id: args.access_key_id,
+        secret_access_key: args.secret_access_key,
+        region: args.region,
+        url: args.minio_url,
+    };
+
+    let s3_client = Client::from_conf(minio_client_config);
+
+    s3_client.download_object("cool", "sexgod", "./".to_string()).await?;
+    s3_client.upload_file("cool", "sexgod_ascension", "./anish.txt".to_string()).await?;
 
     match signal::ctrl_c().await {
         Ok(()) => {

@@ -84,7 +84,6 @@ impl MRCoordinator {
             let map_message = MapJobRequest {
                 input_files: input_file,
                 workload: workload,
-                presigned_url: self.s3_client.presigned_get_uri("myjob", "testcases/books/yang.txt", 50000).await.unwrap(),
                 aux: aux,
             };
 

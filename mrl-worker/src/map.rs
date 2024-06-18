@@ -10,7 +10,6 @@ pub async fn perform_map(request: MapJobRequest) -> Result<(), Error> {
 
     let input_path = request.input_files;
     let workload = request.workload;
-    let url = request.presigned_url;
     let aux = request.aux;
 
     let workload = match workload::try_named(workload.as_str()) {
@@ -18,11 +17,7 @@ pub async fn perform_map(request: MapJobRequest) -> Result<(), Error> {
         None => return Err(anyhow!("The workload `{}` is not a known workload", workload)),
     };
 
-    let response = reqwest::get(url).await?;
-    let body = response.text().await?;
-
     let map_fn = workload.map_fn;
 
-    println!("body: {}", body);
     Ok(())
 }

@@ -2,12 +2,15 @@
 //! those tasks to workers running on a MapReduce cluster. For simplicity, data
 //! is kept on an S3-compatible system, unlike Hadoop or GFS.
 
-use bytes::Bytes;
 use std::hash::Hasher;
+
+use bytes::Bytes;
+use clap::{Parser, Subcommand};
 
 pub mod codec;
 pub mod job;
 pub mod utils;
+pub mod minio;
 
 /////////////////////////////////////////////////////////////////////////////
 // MapReduce application types
@@ -21,7 +24,7 @@ pub mod utils;
 ///
 /// This accomodates both batch (all keys emitted at once) and lazy
 /// (keys only emitted when the iterator is consumed) map operations.
-pub type MapOutput = anyhow::Result<Box<dyn Iterator<Item = anyhow::Result<KeyValue>>>>;
+pub type MapOutput = anyhow::Result<Box<dyn Iterator<Item=anyhow::Result<KeyValue>>>>;
 
 /// A map function takes a key-value pair and auxiliary arguments.
 ///
@@ -33,7 +36,7 @@ pub type MapFn = fn(kv: KeyValue, aux: Bytes) -> MapOutput;
 /// containing a single output value.
 pub type ReduceFn = fn(
     key: Bytes,
-    values: Box<dyn Iterator<Item = Bytes> + '_>,
+    values: Box<dyn Iterator<Item=Bytes> + '_>,
     aux: Bytes,
 ) -> anyhow::Result<Bytes>;
 
@@ -103,8 +106,6 @@ pub fn ihash(key: &[u8]) -> u32 {
 }
 
 /////////////////////////////////////////////////////////////////
-
-use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

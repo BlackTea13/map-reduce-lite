@@ -11,20 +11,16 @@ message ReceivedWorkRequest {
 message MapJobRequest {
   string input_files = 1;
   string workload = 2;
-  string presigned_url = 3;
   repeated string aux = 4;
 }
 
 message ReduceJobRequest {
   string output_files = 1;
   string workload = 2;
-  string presigned_url = 3;
   repeated string aux = 4;
-  // add anything else needed...
 }
 
 message ReceivedWorkResponse {
-  // Received.
   bool success = 1;
 }
 

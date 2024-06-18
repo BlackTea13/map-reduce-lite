@@ -8,6 +8,7 @@
 // use crate::{coordinator, COORDINATOR_STARTUP_MS};
 use anyhow::Result;
 use bytes::Bytes;
+
 // use std::time::Duration;
 
 /// Read an entire [`Bytes`] slice into a [`String`].

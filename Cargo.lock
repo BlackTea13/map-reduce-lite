@@ -1660,6 +1660,7 @@ dependencies = [
  "tonic-build",
  "tracing",
  "tracing-subscriber",
+ "url",
  "workload",
 ]
 

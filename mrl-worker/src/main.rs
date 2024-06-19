@@ -3,20 +3,15 @@ use common::minio::{Client, ClientConfig};
 use tokio::signal;
 use tonic::transport::Server;
 use tracing::{error, info};
-
 mod core;
-
 use core::{CoordinatorClient, MRWorker, WorkerJoinRequest, WorkerLeaveRequest, WorkerServer};
-
 mod args;
-
 use args::Args;
-
 mod map;
 
-async fn start_server(port: u16) {
+async fn start_server(port: u16, client_config: ClientConfig) {
     tokio::task::spawn(async move {
-        let worker = MRWorker::default();
+        let worker = MRWorker::new(client_config);
         let addr = format!("[::1]:{}", port).parse().unwrap();
         info!("Worker server listening on {}", addr);
 
@@ -35,25 +30,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     // Start server as background task.
-    start_server(args.port).await;
-
-    let mut client = CoordinatorClient::connect(args.address).await?;
-    let request = tonic::Request::new(WorkerJoinRequest {
-        port: args.port as u32,
-    });
-    let response = client.worker_join(request).await?;
-
-    let worker_id = response.into_inner().worker_id;
-
-    info!("Worker registered (ID={})", worker_id & 0xFFFF);
-
     let minio_client_config = ClientConfig {
         access_key_id: args.access_key_id,
         secret_access_key: args.secret_access_key,
         region: args.region,
         url: args.minio_url,
     };
-    let _s3_client = Client::from_conf(minio_client_config);
+
+    start_server(args.port, minio_client_config).await;
+    
+    let mut client = CoordinatorClient::connect(args.address).await?;
+    let request = tonic::Request::new(WorkerJoinRequest {
+        port: args.port as u32,
+    });
+    
+    let response = client.worker_join(request).await?;
+
+    let worker_id = response.into_inner().worker_id;
+
+    info!("Worker registered (ID={})", worker_id & 0xFFFF);
 
     match signal::ctrl_c().await {
         Ok(()) => {

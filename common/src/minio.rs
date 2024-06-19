@@ -9,7 +9,7 @@ use aws_smithy_types::byte_stream::Length;
 use bytes::Bytes;
 use tokio::fs::File;
 use tokio::io::copy;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 const CHUNK_SIZE: u64 = 1024 * 1024 * 5;
 
@@ -85,6 +85,31 @@ impl Client {
         Ok(())
     }
 
+    pub async fn list_objects(&self, bucket: &str) -> Result<(), Error> {
+        let mut response = self.client
+            .list_objects_v2()
+            .bucket(bucket.to_owned())
+            .max_keys(50) // In this example, go 10 at a time.
+            .into_paginator()
+            .send();
+
+        while let Some(result) = response.next().await {
+            match result {
+                Ok(output) => {
+                    for object in output.contents() {
+                        info!(" - {}", object.key().unwrap_or("Unknown"));
+                    }
+                }
+                Err(err) => {
+                    error!("{err:?}")
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+
     pub async fn delete_object(&self, bucket: &str, key: &str) -> Result<(), Error> {
         self.client
             .delete_object()
@@ -100,7 +125,7 @@ impl Client {
         Ok(())
     }
 
-    pub async fn download_object(&self, bucket: &str, key: &str, dir: String) -> Result<(), Error> {
+    pub async fn download_object(&self, bucket: &str, key: &str, dir: &str) -> Result<(), Error> {
         info!("Preparing to download object `{key}` from bucket `{bucket}` to directory `{dir}`");
         let file_name = format!("{dir}/mr-in-{}", key.to_string());
         debug!("Downloading file from S3.");

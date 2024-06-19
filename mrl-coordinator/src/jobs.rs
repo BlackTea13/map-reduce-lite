@@ -25,7 +25,7 @@ pub enum JobState {
 }
 
 /// A job context.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Job {
     /// The current state of the job.
     state: JobState,
@@ -48,7 +48,7 @@ pub struct Job {
 
 impl Job {
     /// Generate job from request.
-    /// NOTE: Becareful, this function is TIGHTLY coupled with the stubs generated from `coordinator.proto`.
+    /// NOTE: Be careful, this function is TIGHTLY coupled with the stubs generated from `coordinator.proto`.
     ///       If you make changes to `coordinator.proto`, make sure to propagate changes accordingly.
     pub fn from_request(request: StartTaskRequest) -> Self {
         Self {
@@ -60,6 +60,14 @@ impl Job {
             workers: vec![],
         }
     }
+    
+    pub fn get_input_path(&self) -> &String { &self.input_files_path }
+    
+    pub fn get_output_path(&self) -> &String { &self.output_files_path }
+    
+    pub fn get_workload(&self) -> &String { &self.workload }
+    
+    pub fn get_args(&self) -> &Vec<String> { &self.args }
 
     /// Get the state of the job.
     pub fn get_state(&self) -> JobState {

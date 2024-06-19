@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use tonic::Status;
+use tracing::info;
 
 use crate::worker_info::*;
 
@@ -23,9 +24,11 @@ impl WorkerRegistry {
 
         // Generate ID for the worker.
         let worker_id = vendor.create_worker();
-
+    
+        info!("Appy: A");
         let worker_info = WorkerInfo::new(worker_id, worker_address).await;
-
+        info!("Appy: B");
+        
         if worker_info.is_err() {
             vendor.delete_worker(worker_id)
         }

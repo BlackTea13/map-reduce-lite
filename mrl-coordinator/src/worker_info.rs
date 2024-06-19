@@ -130,7 +130,7 @@ impl WorkerInfo {
     pub async fn new(id: WorkerID, addr: SocketAddr) -> Result<Self, Status> {
         let client = WorkerClient::connect(format!("http://{}", addr).to_string())
             .await
-            .map_err(|_| Status::unknown("Unable to connect to client"))?;
+            .map_err(|e| Status::unknown(format!("Watermelon Could not connect to client: {}", e)))?;
         Ok(Self {
             client,
             id,

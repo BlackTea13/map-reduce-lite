@@ -19,7 +19,8 @@ pub mod worker {
 use tonic::{Request, Response, Status};
 
 
-use tracing::debug;
+use tracing::{debug, info};
+use common::minio::{Client, ClientConfig};
 use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceMessage};
 
 use crate::map;
@@ -30,14 +31,15 @@ enum WorkerState {
     InProgress,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct MRWorker {
     state: WorkerState,
+    client: common::minio::Client,
 }
 
 impl MRWorker {
-    fn new() -> MRWorker {
-        MRWorker { state: WorkerState::Idle }
+    pub fn new(client_config: ClientConfig) -> MRWorker {
+        MRWorker { state: WorkerState::Idle, client: Client::from_conf(client_config) }
     }
 }
 
@@ -47,7 +49,7 @@ impl Worker for MRWorker {
         &self,
         request: Request<ReceivedWorkRequest>,
     ) -> Result<Response<ReceivedWorkResponse>, Status> {
-        debug!("Received a work request");
+        info!("Received a work request");
 
         // we accept the work only if we are free
         match self.state {
@@ -57,9 +59,9 @@ impl Worker for MRWorker {
 
         let work_request = request.into_inner();
         let _ = match work_request.job_message.unwrap() {
-            MapMessage(msg) => map::perform_map(msg),
+            MapMessage(msg) => map::perform_map(msg, &self.client).await,
             ReduceMessage(msg) => todo!(),
-        }.await;
+        };
 
         let reply = ReceivedWorkResponse { success: true };
         Ok(Response::new(reply))

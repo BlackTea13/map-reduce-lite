@@ -72,24 +72,21 @@ impl MRCoordinator {
     // TODO: partition input/output for mapper and reducers.
     async fn _assign_work(
         &self,
+        job: &jobs::Job,
         worker_id: WorkerID,
-        input_file: String,
-        output_file: String,
-        work_type: WorkType,
-        workload: String,
-        aux: Vec<String>,
     ) {
+        
+        info!("sending work");
         let mut registry = self.get_registry().await;
-        let work_state = WorkerState::from_work_type(work_type);
 
-        registry.set_worker_state(worker_id, work_state);
+        // registry.set_worker_state(worker_id, work_state);
 
         // TODO: send Map work for now, someone handle this when for reduce
         if let Some(worker) = registry.get_worker_mut(worker_id) {
             let map_message = MapJobRequest {
-                input_files: input_file,
-                workload,
-                aux,
+                input_files: job.get_input_path().clone(),
+                workload: job.get_workload().clone(),
+                aux: job.get_args().clone(),
             };
 
             let message = JobMessage::MapMessage(map_message);
@@ -168,7 +165,7 @@ impl Coordinator for MRCoordinator {
         // Construct address for worker's gRPC server.
         let worker_ip = request.remote_addr().unwrap().ip();
         let addr = SocketAddr::new(worker_ip, request.into_inner().port as u16);
-
+        
         // Create a new worker, generate and assign an ID to it.
         let worker_id = {
             let mut registry = self.get_registry().await;
@@ -178,7 +175,8 @@ impl Coordinator for MRCoordinator {
         // Server ack.
         let mut client = WorkerClient::connect(format!("http://{}", addr).to_string())
             .await
-            .map_err(|_| Status::unknown("Unable to connect to client"))?;
+            .map_err(|e| Status::unknown(format!("Could not connect to client: {}", e)))?;
+
         let request = tonic::Request::new(AckRequest {});
 
         let resp = client.ack(request).await;
@@ -235,6 +233,7 @@ impl Coordinator for MRCoordinator {
     ) -> Result<Response<StartTaskResponse>, Status> {
         let task_request = request.into_inner();
         let job = Job::from_request(task_request);
+        self._assign_work(&job, 0).await;
 
         {
             // Add job to the queue.

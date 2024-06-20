@@ -1,5 +1,6 @@
 use crate::core::{WorkType, WorkerClient};
 use std::{net::SocketAddr};
+use tokio::select;
 use tonic::transport::Channel;
 use tonic::Status;
 
@@ -128,14 +129,32 @@ pub struct WorkerInfo {
 
 impl WorkerInfo {
     pub async fn new(id: WorkerID, addr: SocketAddr) -> Result<Self, Status> {
-        let client = WorkerClient::connect(format!("http://{}", addr).to_string())
-            .await
-            .map_err(|e| Status::unknown(format!("Watermelon Could not connect to client: {}", e)))?;
-        Ok(Self {
-            client,
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+
+        let sender_clone = sender.clone();
+        tokio::task::spawn(async move {
+            let mut client = WorkerClient::connect(format!("http://{}", addr).to_string()).await;
+
+            while client.is_err() {
+                client = WorkerClient::connect(format!("http://{}", addr).to_string()).await;
+            }
+
+            let _ = sender.send(Some(client)).await;
+        });
+
+        select! {
+            Some(client) = receiver.recv() => {
+                Ok(Self {
+            client: client.unwrap().unwrap(),
             id,
             state: WorkerState::Free, // By default, workers start off free.
         })
+            }
+            // TODO: Store timeout config somewhere.
+            _ = tokio::time::sleep(tokio::time::Duration::from_secs(5)) => {
+                Err(Status::unavailable("I forgot the message"))
+            }
+        }
     }
 
     /// Set worker state.

@@ -1,8 +1,9 @@
+use coordinator::{coordinator_client::CoordinatorClient, JobsRequest, StartTaskRequest};
+
 //
 // Import gRPC stubs/definitions.
 //
 use crate::core::coordinator::StatusRequest;
-use coordinator::{coordinator_client::CoordinatorClient, JobsRequest, StartTaskRequest};
 
 pub mod coordinator {
     tonic::include_proto!("coordinator");

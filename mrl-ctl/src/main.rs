@@ -1,5 +1,6 @@
+use args::{Commands, parse_args};
+
 mod args;
-use args::{parse_args, Commands};
 
 mod core;
 

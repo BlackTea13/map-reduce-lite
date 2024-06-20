@@ -1,22 +1,23 @@
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
+
 use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
 use tracing::info;
 
-pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
 use coordinator::*;
-pub use worker::{worker_client::WorkerClient, AckRequest, ReceivedWorkRequest};
+pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
+pub use worker::{AckRequest, ReceivedWorkRequest, worker_client::WorkerClient};
 
-use crate::core::worker::received_work_request::JobMessage;
-use crate::core::worker::MapJobRequest;
-use crate::jobs::{Job, JobQueue};
-use crate::minio::{Client, ClientConfig};
-use crate::worker_info::WorkerID;
 use crate::{
     jobs,
     worker_info::{Worker, WorkerState},
     worker_registry::WorkerRegistry,
 };
+use crate::core::worker::MapJobRequest;
+use crate::core::worker::received_work_request::JobMessage;
+use crate::jobs::{Job, JobQueue};
+use crate::minio::{Client, ClientConfig};
+use crate::worker_info::WorkerID;
 
 pub mod coordinator {
     tonic::include_proto!("coordinator");
@@ -75,8 +76,6 @@ impl MRCoordinator {
         job: &jobs::Job,
         worker_id: WorkerID,
     ) {
-        
-        info!("sending work");
         let mut registry = self.get_registry().await;
 
         // registry.set_worker_state(worker_id, work_state);
@@ -165,7 +164,7 @@ impl Coordinator for MRCoordinator {
         // Construct address for worker's gRPC server.
         let worker_ip = request.remote_addr().unwrap().ip();
         let addr = SocketAddr::new(worker_ip, request.into_inner().port as u16);
-        
+
         // Create a new worker, generate and assign an ID to it.
         let worker_id = {
             let mut registry = self.get_registry().await;
@@ -233,8 +232,10 @@ impl Coordinator for MRCoordinator {
     ) -> Result<Response<StartTaskResponse>, Status> {
         let task_request = request.into_inner();
         let job = Job::from_request(task_request);
-        self._assign_work(&job, 0).await;
-
+        
+        // robert's map tester
+        // self._assign_work(&job, 0).await;
+        
         {
             // Add job to the queue.
             let mut job_queue = self.get_job_queue().await;

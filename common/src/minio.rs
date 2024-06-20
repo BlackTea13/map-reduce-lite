@@ -129,16 +129,13 @@ impl Client {
     pub async fn glob_download(&self, bucket: &str, glob_pattern: &str, dir: &str) -> Result<(), Error> {
         let glob = Glob::new(glob_pattern).expect("invalid glob pattern");
         let glob_matcher = glob.compile_matcher();
-
         let objects = self.client.list_objects_v2().bucket(bucket).send().await?;
 
         for object in objects.contents.unwrap() {
             let key = object.key.as_ref().unwrap();
-            if glob_matcher.is_match(key) {
-                info!("Downloading: {}", key);
 
-                let object_data = self.client.get_object().bucket(bucket).key(key).send().await?;
-                let body = object_data.body.collect().await?;
+            if glob_matcher.is_match(key) {
+                self.download_object(bucket, key, dir).await?;
             }
         }
 
@@ -147,8 +144,8 @@ impl Client {
 
 
     pub async fn download_object(&self, bucket: &str, key: &str, dir: &str) -> Result<(), Error> {
-        info!("Preparing to download object `{key}` from bucket `{bucket}` to directory `{dir}`");
-        let file_name = format!("{dir}/mr-in-{}", key.to_string());
+        info!("Downloading object `{key}` from bucket `{bucket}` to directory `{dir}`");
+        let file_name = format!("{dir}/mr-in-{}", key.split('/').collect::<Vec<_>>().last().unwrap());
         debug!("Downloading file from S3.");
 
         // Define the part size (e.g., 5 MB)
@@ -157,7 +154,7 @@ impl Client {
         let mut end_byte = part_size - 1;
 
         // Open the local file for writing
-        let mut file = File::create(&file_name).await?;
+        let mut file = File::create(file_name).await?; // FAILs
 
         loop {
             // Define the byte range for the part

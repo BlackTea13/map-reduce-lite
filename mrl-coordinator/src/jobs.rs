@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::{
     core::coordinator::StartTaskRequest,
-    worker_info::{WorkerID},
+    worker_info::WorkerID,
 };
 
 /// State of the job.
@@ -60,13 +60,13 @@ impl Job {
             workers: vec![],
         }
     }
-    
+
     pub fn get_input_path(&self) -> &String { &self.input_files_path }
-    
+
     pub fn get_output_path(&self) -> &String { &self.output_files_path }
-    
+
     pub fn get_workload(&self) -> &String { &self.workload }
-    
+
     pub fn get_args(&self) -> &Vec<String> { &self.args }
 
     /// Get the state of the job.

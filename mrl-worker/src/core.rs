@@ -1,29 +1,26 @@
+use tonic::{Request, Response, Status};
+use tracing::{debug, info};
+
+use common::minio::{Client, ClientConfig};
 //
 // Import gRPC stubs/definitions.
 //
 pub use coordinator::{
     coordinator_client::CoordinatorClient, WorkerJoinRequest, WorkerLeaveRequest,
 };
+pub use worker::{AckRequest, AckResponse, MapJobRequest, ReceivedWorkRequest, ReceivedWorkResponse};
+pub use worker::worker_server::{Worker, WorkerServer};
+
+use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceMessage};
+use crate::map;
 
 pub mod coordinator {
     tonic::include_proto!("coordinator");
 }
 
-pub use worker::worker_server::{Worker, WorkerServer};
-pub use worker::{AckRequest, AckResponse, ReceivedWorkRequest, MapJobRequest, ReceivedWorkResponse};
-
 pub mod worker {
     tonic::include_proto!("worker");
 }
-
-use tonic::{Request, Response, Status};
-
-
-use tracing::{debug, info};
-use common::minio::{Client, ClientConfig};
-use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceMessage};
-
-use crate::map;
 
 #[derive(Debug, Default)]
 enum WorkerState {

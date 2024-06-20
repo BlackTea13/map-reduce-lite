@@ -1,12 +1,16 @@
 use clap::Parser;
-use common::minio::{Client, ClientConfig};
 use tokio::signal;
 use tonic::transport::Server;
 use tracing::{error, info};
-mod core;
-use core::{CoordinatorClient, MRWorker, WorkerJoinRequest, WorkerLeaveRequest, WorkerServer};
-mod args;
+
 use args::Args;
+use common::minio::{Client, ClientConfig};
+use core::{CoordinatorClient, MRWorker, WorkerJoinRequest, WorkerLeaveRequest, WorkerServer};
+
+mod core;
+
+mod args;
+
 mod map;
 
 async fn start_server(port: u16, client_config: ClientConfig) {
@@ -38,12 +42,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     start_server(args.port, minio_client_config).await;
-    
+
     let mut client = CoordinatorClient::connect(args.address).await?;
     let request = tonic::Request::new(WorkerJoinRequest {
         port: args.port as u32,
     });
-    
+
     let response = client.worker_join(request).await?;
 
     let worker_id = response.into_inner().worker_id;

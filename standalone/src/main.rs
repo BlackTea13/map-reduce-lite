@@ -1,6 +1,7 @@
 use anyhow::*;
 use bytes::Bytes;
 use clap::Parser;
+
 use common::Workload;
 use standalone::{
     engine::{perform_map, perform_reduce},
@@ -24,6 +25,7 @@ fn parse_args() -> Job {
         },
     }
 }
+
 fn run_standalone_mr_job(job: Job, engine: Workload) -> Result<()> {
     let serialized_args = Bytes::from(serde_json::to_string(&job.args)?);
     let n_reduce = 11;

@@ -7,6 +7,7 @@ use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart};
 use aws_smithy_types::byte_stream::Length;
 use bytes::Bytes;
+use globset::{Glob, GlobMatcher};
 use tokio::fs::File;
 use tokio::io::copy;
 use tracing::{debug, error, info};
@@ -124,6 +125,26 @@ impl Client {
         self.client.delete_bucket().bucket(bucket).send().await?;
         Ok(())
     }
+
+    pub async fn glob_download(&self, bucket: &str, glob_pattern: &str, dir: &str) -> Result<(), Error> {
+        let glob = Glob::new(glob_pattern).expect("invalid glob pattern");
+        let glob_matcher = glob.compile_matcher();
+
+        let objects = self.client.list_objects_v2().bucket(bucket).send().await?;
+
+        for object in objects.contents.unwrap() {
+            let key = object.key.as_ref().unwrap();
+            if glob_matcher.is_match(key) {
+                info!("Downloading: {}", key);
+
+                let object_data = self.client.get_object().bucket(bucket).key(key).send().await?;
+                let body = object_data.body.collect().await?;
+            }
+        }
+
+        Ok(())
+    }
+
 
     pub async fn download_object(&self, bucket: &str, key: &str, dir: &str) -> Result<(), Error> {
         info!("Preparing to download object `{key}` from bucket `{bucket}` to directory `{dir}`");

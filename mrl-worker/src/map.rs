@@ -6,6 +6,9 @@ use common::KeyValue;
 use url::Url;
 use common::minio::Client;
 use crate::core::MapJobRequest;
+use aws_sdk_s3 as s3;
+
+const TEMP_DIR: &str = "/var/tmp/";
 
 pub async fn perform_map(request: MapJobRequest, client: &Client) -> Result<(), Error> {
     info!("Starting map task");
@@ -30,13 +33,16 @@ pub async fn perform_map(request: MapJobRequest, client: &Client) -> Result<(), 
     };
     
     let bucket = s3_url.domain().unwrap();
-    let key = s3_url.path();
+    let key = &s3_url.path()[1..]; // we don't want the first '/' character
     
-    // client.list_objects(bucket);
+    client.list_objects(bucket).await?;
+    
     
     // put stuff in temp folder in Unix filesystems
-    const TEMP_DIR: &str = "/var/tmp/";
-    // client.download_object(bucket, key, TEMP_DIR).await?;
+    if let Err(e) = client.download_object(bucket, key, TEMP_DIR).await {
+        error!("failed to download object in bucket `{bucket}` with key `{key}`: {e}");
+        return Err(e);
+    }
     
     let map_fn = workload.map_fn;
 

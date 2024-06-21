@@ -7,7 +7,7 @@ use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart};
 use aws_smithy_types::byte_stream::Length;
 use bytes::Bytes;
-use globset::{Glob, GlobMatcher};
+use globset::Glob;
 use tokio::fs::File;
 use tokio::io::copy;
 use tracing::{debug, error, info};
@@ -86,10 +86,19 @@ impl Client {
         Ok(())
     }
 
+    /// List all objects found in S3 bucket.
     pub async fn list_objects(&self, bucket: &str) -> Result<(), Error> {
-        let mut response = self.client
+        // "" - For root dir.
+        self.list_objects_in_dir(bucket, "").await
+    }
+
+    /// Lists all objects found in the specified folder in S3.
+    pub async fn list_objects_in_dir(&self, bucket: &str, folder_path: &str) -> Result<(), Error> {
+        let mut response = self
+            .client
             .list_objects_v2()
-            .bucket(bucket.to_owned())
+            .bucket(bucket)
+            .prefix(folder_path)
             .max_keys(50) // In this example, go 10 at a time.
             .into_paginator()
             .send();
@@ -110,7 +119,6 @@ impl Client {
         Ok(())
     }
 
-
     pub async fn delete_object(&self, bucket: &str, key: &str) -> Result<(), Error> {
         self.client
             .delete_object()
@@ -126,7 +134,12 @@ impl Client {
         Ok(())
     }
 
-    pub async fn glob_download(&self, bucket: &str, glob_pattern: &str, dir: &str) -> Result<(), Error> {
+    pub async fn glob_download(
+        &self,
+        bucket: &str,
+        glob_pattern: &str,
+        dir: &str,
+    ) -> Result<(), Error> {
         let glob = Glob::new(glob_pattern).expect("invalid glob pattern");
         let glob_matcher = glob.compile_matcher();
         let objects = self.client.list_objects_v2().bucket(bucket).send().await?;
@@ -142,10 +155,12 @@ impl Client {
         Ok(())
     }
 
-
     pub async fn download_object(&self, bucket: &str, key: &str, dir: &str) -> Result<(), Error> {
         info!("Downloading object `{key}` from bucket `{bucket}` to directory `{dir}`");
-        let file_name = format!("{dir}/mr-in-{}", key.split('/').collect::<Vec<_>>().last().unwrap());
+        let file_name = format!(
+            "{dir}/mr-in-{}",
+            key.split('/').collect::<Vec<_>>().last().unwrap()
+        );
         debug!("Downloading file from S3.");
 
         // Define the part size (e.g., 5 MB)
@@ -190,7 +205,8 @@ impl Client {
 
     pub async fn upload_file(&self, bucket: &str, key: &str, path: String) -> Result<(), Error> {
         info!("Preparing to upload file `{path}` to bucket `{bucket}` with key `{key}`");
-        let multipart_upload = self.client
+        let multipart_upload = self
+            .client
             .create_multipart_upload()
             .bucket(bucket)
             .key(key)
@@ -234,7 +250,8 @@ impl Client {
 
             //Chunk index needs to start at 0, but part numbers start at 1.
             let part_number = (chunk_index as i32) + 1;
-            let upload_part_res = self.client
+            let upload_part_res = self
+                .client
                 .upload_part()
                 .key(key)
                 .bucket(bucket)
@@ -252,11 +269,13 @@ impl Client {
             );
         }
 
-        let completed_multipart_upload: CompletedMultipartUpload = CompletedMultipartUpload::builder()
-            .set_parts(Some(upload_parts))
-            .build();
+        let completed_multipart_upload: CompletedMultipartUpload =
+            CompletedMultipartUpload::builder()
+                .set_parts(Some(upload_parts))
+                .build();
 
-        let _complete_multipart_upload_res = self.client
+        let _complete_multipart_upload_res = self
+            .client
             .complete_multipart_upload()
             .bucket(bucket)
             .key(key)

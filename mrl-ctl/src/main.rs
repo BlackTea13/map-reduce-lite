@@ -1,4 +1,4 @@
-use args::{Commands, parse_args};
+use args::{parse_args, Commands};
 
 mod args;
 

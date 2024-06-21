@@ -1,9 +1,6 @@
 use std::collections::VecDeque;
 
-use crate::{
-    core::coordinator::StartTaskRequest,
-    worker_info::WorkerID,
-};
+use crate::{core::coordinator::StartTaskRequest, worker_info::WorkerID};
 
 /// State of the job.
 #[derive(Debug, Clone, Copy)]
@@ -61,13 +58,25 @@ impl Job {
         }
     }
 
-    pub fn get_input_path(&self) -> &String { &self.input_files_path }
+    pub fn get_job_state(&self) -> JobState {
+        self.state
+    }
 
-    pub fn get_output_path(&self) -> &String { &self.output_files_path }
+    pub fn get_input_path(&self) -> &String {
+        &self.input_files_path
+    }
 
-    pub fn get_workload(&self) -> &String { &self.workload }
+    pub fn get_output_path(&self) -> &String {
+        &self.output_files_path
+    }
 
-    pub fn get_args(&self) -> &Vec<String> { &self.args }
+    pub fn get_workload(&self) -> &String {
+        &self.workload
+    }
+
+    pub fn get_args(&self) -> &Vec<String> {
+        &self.args
+    }
 
     /// Get the state of the job.
     pub fn get_state(&self) -> JobState {
@@ -118,6 +127,10 @@ impl JobQueue {
         self.jobs.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Return the number of jobs which has been processed. (Pointer has passed it.)
     pub fn number_of_jobs_pending(&self) -> usize {
         self.len() - self.current_index
@@ -133,10 +146,12 @@ impl JobQueue {
     }
 
     /// Return the current job and increment to next.
-    pub fn pop_job(&mut self) -> Option<&Job> {
+    pub fn pop_job(&mut self) -> Option<Job> {
         let index = self.current_index;
         self.advance();
-        self.jobs.get(index)
+
+        // NOTE: We can't return a reference.
+        self.jobs.get(index).cloned()
     }
 
     /// Decrement pointer.

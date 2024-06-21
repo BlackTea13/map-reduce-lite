@@ -14,6 +14,7 @@ use tracing::{debug, error, info};
 
 const CHUNK_SIZE: u64 = 1024 * 1024 * 5;
 
+#[derive(Clone)]
 pub struct ClientConfig {
     /// id
     pub access_key_id: String,
@@ -28,7 +29,7 @@ pub struct ClientConfig {
     pub url: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Client {
     pub client: s3::Client,
 }
@@ -86,9 +87,7 @@ impl Client {
         Ok(())
     }
 
-    /// List all objects found in S3 bucket.
     pub async fn list_objects(&self, bucket: &str) -> Result<(), Error> {
-        // "" - For root dir.
         self.list_objects_in_dir(bucket, "").await
     }
 

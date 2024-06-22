@@ -95,7 +95,6 @@ impl Worker for MRWorker {
         Ok(Response::new(reply))
     }
 
-    // Just for debugging. This can be removed.
     async fn ack(&self, request: Request<AckRequest>) -> Result<Response<AckResponse>, Status> {
         let work_request = request.into_inner();
         {

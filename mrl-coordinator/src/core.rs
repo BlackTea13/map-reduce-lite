@@ -181,7 +181,7 @@ impl Coordinator for MRCoordinator {
         let mut client = WorkerClient::connect(format!("http://{}", addr).to_string())
             .await
             .map_err(|_| Status::unknown("Unable to connect to client"))?;
-        let request = Request::new(AckRequest { worker_id });
+        let request = Request::new(AckRequest { worker_id: worker_id as u32 });
 
         let resp = client.ack(request).await;
         if resp.is_err() {
@@ -255,6 +255,8 @@ impl Coordinator for MRCoordinator {
 
         let worker_done_request = request.into_inner();
         let worker_id = worker_done_request.worker_id;
+
+        info!("Worker done (ID={})", Worker::get_worker_index(worker_id));
 
         let mut registry = self.get_registry().await;
         if let Some(worker) = registry.get_worker_mut(worker_id) {

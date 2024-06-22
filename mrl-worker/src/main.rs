@@ -18,6 +18,7 @@ mod map;
 
 async fn start_server(port: u16, address: String) {
     let addr = format!("[::1]:{}", port).parse().unwrap();
+    info!("Worker server listening on {}", addr);
 
     tokio::task::spawn(async move {
         let worker = MRWorker::new(address);

@@ -9,15 +9,15 @@ message ReceivedWorkRequest {
 }
 
 message MapJobRequest {
-  string input_files = 1;
+  repeated string input_keys = 1;
   string workload = 2;
-  repeated string aux = 4;
+  repeated string aux = 3;
 }
 
 message ReduceJobRequest {
-  string output_files = 1;
+  repeated string input_keys = 1;
   string workload = 2;
-  repeated string aux = 4;
+  repeated string aux = 3;
 }
 
 message ReceivedWorkResponse {

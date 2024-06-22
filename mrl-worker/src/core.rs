@@ -1,5 +1,7 @@
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 use common::minio::{Client, ClientConfig};
 //
@@ -8,6 +10,9 @@ use common::minio::{Client, ClientConfig};
 pub use coordinator::{
     coordinator_client::CoordinatorClient, WorkerJoinRequest, WorkerLeaveRequest,
 };
+
+use crate::core::coordinator::WorkerDoneRequest;
+use crate::core::worker::worker_client::WorkerClient;
 pub use worker::{AckRequest, AckResponse, MapJobRequest, ReceivedWorkRequest, ReceivedWorkResponse};
 pub use worker::worker_server::{Worker, WorkerServer};
 
@@ -22,6 +27,13 @@ pub mod worker {
     tonic::include_proto!("worker");
 }
 
+
+use tonic::transport::Channel;
+
+
+
+
+
 #[derive(Debug, Default)]
 enum WorkerState {
     #[default] Idle,
@@ -31,12 +43,14 @@ enum WorkerState {
 #[derive(Debug)]
 pub struct MRWorker {
     state: WorkerState,
-    client: common::minio::Client,
+    client: Client,
+    id: Arc<Mutex<Option<u32>>>,
+    address: String,
 }
 
 impl MRWorker {
-    pub fn new(client_config: ClientConfig) -> MRWorker {
-        MRWorker { state: WorkerState::Idle, client: Client::from_conf(client_config) }
+    pub fn new(address: String, client_config: ClientConfig) -> MRWorker {
+        MRWorker { state: WorkerState::Idle, id: Arc::new(Mutex::new(None)), address, client: Client::from_conf(client_config) }
     }
 }
 
@@ -46,27 +60,57 @@ impl Worker for MRWorker {
         &self,
         request: Request<ReceivedWorkRequest>,
     ) -> Result<Response<ReceivedWorkResponse>, Status> {
-        info!("Received a work request");
 
-        // we accept the work only if we are free
-        match self.state {
-            WorkerState::Idle => {}
-            WorkerState::InProgress => return Ok(Response::new(ReceivedWorkResponse { success: false })),
-        };
+        let address = self.address.clone();
+        let id = self.id.clone();
+        let client = self.client.clone();
+
+        {
+            let worker_id = id.lock().await;
+            info!("Worker (ID={:?}) Received a work request", worker_id);
+
+            // Accept the work only if we are free
+            match self.state {
+                WorkerState::Idle => {},
+                WorkerState::InProgress => return Ok(Response::new(ReceivedWorkResponse { success: false })),
+            }
+        }
 
         let work_request = request.into_inner();
-        let _ = match work_request.job_message.unwrap() {
-            MapMessage(msg) => map::perform_map(msg, &self.client).await,
-            ReduceMessage(msg) => todo!(),
-        };
+
+        tokio::task::spawn(async move {
+            let result = match work_request.job_message.unwrap() {
+                MapMessage(msg) => map::perform_map(msg, &client).await,
+                ReduceMessage(msg) => todo!(),
+            };
+
+            let mut coordinator_connect = CoordinatorClient::connect(address.clone()).await;
+            let worker_id = id.lock().await.unwrap() as i32;
+
+            if let Ok(mut client) = coordinator_connect {
+                let request = Request::new(WorkerDoneRequest { worker_id });
+
+                if let Err(_) = client.worker_done(request).await {
+                    error!("Worker (ID={}) failed to finish job", worker_id);
+                } else {
+                    info!("Worker (ID={}) done with job", worker_id);
+                }
+            }
+
+        });
 
         let reply = ReceivedWorkResponse { success: true };
         Ok(Response::new(reply))
     }
 
-    // Just for debugging. This can be removed.
-    async fn ack(&self, _: Request<AckRequest>) -> Result<Response<AckResponse>, Status> {
+    async fn ack(&self, request: Request<AckRequest>) -> Result<Response<AckResponse>, Status> {
+        let work_request = request.into_inner();
+        {
+            let mut id = self.id.lock().await;
+            *id = Some(work_request.worker_id);
+        }
         let reply = AckResponse {};
         Ok(Response::new(reply))
     }
 }
+

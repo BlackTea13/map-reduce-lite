@@ -111,11 +111,14 @@ impl WorkerRegistry {
             .collect()
     }
 
+
+    /// Get worker from registry based on worker_id
     pub fn get_worker(&self, worker_id: WorkerID) -> Option<&WorkerInfo> {
         let index = Worker::get_worker_index(worker_id) as usize;
         self.worker_list.get(index)
     }
 
+    /// Get worker from registry based on worker_id mutable
     pub fn get_worker_mut(&mut self, worker_id: WorkerID) -> Option<&mut WorkerInfo> {
         let index = Worker::get_worker_index(worker_id) as usize;
         self.worker_list.get_mut(index)

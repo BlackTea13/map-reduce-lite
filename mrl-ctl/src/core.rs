@@ -1,9 +1,9 @@
-use coordinator::{coordinator_client::CoordinatorClient, JobsRequest, StartTaskRequest};
-
 //
 // Import gRPC stubs/definitions.
 //
 use crate::core::coordinator::StatusRequest;
+use coordinator::{coordinator_client::CoordinatorClient, JobsRequest, AddJobRequest};
+
 
 pub mod coordinator {
     tonic::include_proto!("coordinator");
@@ -40,13 +40,13 @@ pub async fn submit(
     aux: Vec<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut client = CoordinatorClient::connect(format!("http://[::1]:{}", PORT)).await?;
-    let request = tonic::Request::new(StartTaskRequest {
+    let request = tonic::Request::new(AddJobRequest {
         input_files: input,
         output_files: output,
         workload,
         aux,
     });
-    let response = client.start_task(request).await?;
+    let response = client.add_job(request).await?;
     dbg!(response.into_inner());
 
     Ok(())

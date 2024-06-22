@@ -83,6 +83,40 @@ impl MRCoordinator {
         registry.set_worker_state(worker_id, WorkerState::Free);
     }
 
+    // TODO: partition input/output for mapper and reducers.
+    async fn _assign_work(
+        &self,
+        worker_id: WorkerID,
+        input_file: String,
+        output_file: String,
+        work_type: WorkType,
+        workload: String,
+        aux: Vec<String>,
+    ) {
+        let mut registry = self.get_registry().await;
+        let work_state = WorkerState::from_work_type(work_type);
+
+        registry.set_worker_state(worker_id, work_state);
+
+        // TODO: send Map work for now, someone handle this when for reduce
+        if let Some(worker) = registry.get_worker_mut(worker_id) {
+            let map_message = MapJobRequest {
+                input_files: input_file,
+                workload,
+                aux,
+            };
+
+            worker.set_state(WorkerState::Mapping);
+
+            let message = JobMessage::MapMessage(map_message);
+            let request = Request::new(ReceivedWorkRequest {
+                job_message: Some(message),
+            });
+
+            let response = worker.client.received_work(request).await.unwrap();
+        }
+    }
+
     async fn status(&self) -> Vec<String> {
         let registry = self.get_registry().await;
         let number_of_workers = registry.len();
@@ -160,9 +194,8 @@ impl Coordinator for MRCoordinator {
         // Server ack.
         let mut client = WorkerClient::connect(format!("http://{}", addr).to_string())
             .await
-            .map_err(|e| Status::unknown(format!("Could not connect to client: {}", e)))?;
-
-        let request = tonic::Request::new(AckRequest {});
+            .map_err(|_| Status::unknown("Unable to connect to client"))?;
+        let request = Request::new(AckRequest { worker_id: worker_id as u32 });
 
         let resp = client.ack(request).await;
         if resp.is_err() {
@@ -210,13 +243,11 @@ impl Coordinator for MRCoordinator {
         Ok(Response::new(reply))
     }
 
-    // NOTE: This name is pretty misleading.
-    //       In reality, this function is just adding the submitted job
-    //       into the job queue and nothing else.
-    async fn start_task(
+    /// Adding a job into queue
+    async fn add_job(
         &self,
-        request: Request<StartTaskRequest>,
-    ) -> Result<Response<StartTaskResponse>, Status> {
+        request: Request<AddJobRequest>,
+    ) -> Result<Response<AddJobResponse>, Status> {
         let task_request = request.into_inner();
         let job = Job::from_request(task_request);
 
@@ -230,14 +261,29 @@ impl Coordinator for MRCoordinator {
             self.job_queue_notifier.notify_one();
         }
 
-        let reply = StartTaskResponse { success: true };
+        let reply = AddJobResponse { success: true };
         Ok(Response::new(reply))
     }
 
+    /// Update the status in the registry when the worker is done
     async fn worker_done(
         &self,
-        _request: Request<WorkerDoneRequest>,
+        request: Request<WorkerDoneRequest>,
     ) -> Result<Response<WorkerDoneResponse>, Status> {
+
+        let worker_done_request = request.into_inner();
+        let worker_id = worker_done_request.worker_id;
+
+        info!("Worker done (ID={})", Worker::get_worker_index(worker_id));
+
+        let mut registry = self.get_registry().await;
+        if let Some(worker) = registry.get_worker_mut(worker_id) {
+            match worker.state {
+                WorkerState::Mapping => worker.set_state(WorkerState::Reducing),
+                _ => worker.set_state(WorkerState::Free)
+            }
+        }
+
         let reply = WorkerDoneResponse { success: true };
         Ok(Response::new(reply))
     }

@@ -1,7 +1,9 @@
 use std::collections::VecDeque;
 
-use crate::{core::coordinator::StartTaskRequest, worker_info::WorkerID};
-
+use crate::{
+    core::coordinator::AddJobRequest,
+    worker_info::{WorkerID},
+};
 /// State of the job.
 #[derive(Debug, Clone, Copy)]
 pub enum JobState {
@@ -47,7 +49,7 @@ impl Job {
     /// Generate job from request.
     /// NOTE: Be careful, this function is TIGHTLY coupled with the stubs generated from `coordinator.proto`.
     ///       If you make changes to `coordinator.proto`, make sure to propagate changes accordingly.
-    pub fn from_request(request: StartTaskRequest) -> Self {
+    pub fn from_request(request: AddJobRequest) -> Self {
         Self {
             state: JobState::Pending,
             input_files_path: request.input_files,

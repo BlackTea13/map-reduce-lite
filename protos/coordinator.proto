@@ -38,14 +38,14 @@ message WorkerTaskResponse {
   bool success = 1;
 }
 
-message StartTaskRequest {
+message AddJobRequest {
   string input_files = 1;
   string output_files = 2;
   string workload = 3;
   repeated string aux = 4;
 }
 
-message StartTaskResponse {
+message AddJobResponse {
   bool success = 1;
 }
 
@@ -63,7 +63,7 @@ service Coordinator {
   rpc WorkerJoin (WorkerJoinRequest) returns (WorkerJoinResponse);
   rpc WorkerLeave (WorkerLeaveRequest) returns (WorkerLeaveResponse);
   rpc WorkerTask (WorkerTaskRequest) returns (WorkerTaskResponse);
-  rpc StartTask (StartTaskRequest) returns (StartTaskResponse);
+  rpc AddJob (AddJobRequest) returns (AddJobResponse);
   rpc WorkerDone (WorkerDoneRequest) returns (WorkerDoneResponse);
 }
 

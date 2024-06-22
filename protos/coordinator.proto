@@ -6,7 +6,7 @@ message JobsRequest {}
 message JobsResponse {
   // This can be changed, but this is 
   // the simplest/fastest solution.
-  repeated string data = 1;  
+  repeated string data = 1;
 }
 
 message StatusRequest {}
@@ -20,7 +20,7 @@ message WorkerJoinRequest {
   uint32 port = 1;
 }
 message WorkerJoinResponse {
-  int32 worker_id = 1;  
+  int32 worker_id = 1;
 }
 
 // Worker asking to leave workforce.

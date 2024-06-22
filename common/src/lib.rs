@@ -8,7 +8,6 @@ use bytes::Bytes;
 use clap::{Parser, Subcommand};
 
 pub mod codec;
-pub mod job;
 pub mod utils;
 pub mod minio;
 

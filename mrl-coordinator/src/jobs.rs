@@ -4,7 +4,6 @@ use crate::{
     core::coordinator::AddJobRequest,
     worker_info::{WorkerID},
 };
-
 /// State of the job.
 #[derive(Debug, Clone, Copy)]
 pub enum JobState {
@@ -25,7 +24,7 @@ pub enum JobState {
 }
 
 /// A job context.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Job {
     /// The current state of the job.
     state: JobState,
@@ -48,7 +47,7 @@ pub struct Job {
 
 impl Job {
     /// Generate job from request.
-    /// NOTE: Becareful, this function is TIGHTLY coupled with the stubs generated from `coordinator.proto`.
+    /// NOTE: Be careful, this function is TIGHTLY coupled with the stubs generated from `coordinator.proto`.
     ///       If you make changes to `coordinator.proto`, make sure to propagate changes accordingly.
     pub fn from_request(request: AddJobRequest) -> Self {
         Self {
@@ -59,6 +58,26 @@ impl Job {
             args: request.aux,
             workers: vec![],
         }
+    }
+
+    pub fn get_job_state(&self) -> JobState {
+        self.state
+    }
+
+    pub fn get_input_path(&self) -> &String {
+        &self.input_files_path
+    }
+
+    pub fn get_output_path(&self) -> &String {
+        &self.output_files_path
+    }
+
+    pub fn get_workload(&self) -> &String {
+        &self.workload
+    }
+
+    pub fn get_args(&self) -> &Vec<String> {
+        &self.args
     }
 
     /// Get the state of the job.
@@ -110,6 +129,10 @@ impl JobQueue {
         self.jobs.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Return the number of jobs which has been processed. (Pointer has passed it.)
     pub fn number_of_jobs_pending(&self) -> usize {
         self.len() - self.current_index
@@ -125,10 +148,12 @@ impl JobQueue {
     }
 
     /// Return the current job and increment to next.
-    pub fn pop_job(&mut self) -> Option<&Job> {
+    pub fn pop_job(&mut self) -> Option<Job> {
         let index = self.current_index;
         self.advance();
-        self.jobs.get(index)
+
+        // NOTE: We can't return a reference.
+        self.jobs.get(index).cloned()
     }
 
     /// Decrement pointer.

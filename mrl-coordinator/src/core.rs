@@ -1,5 +1,6 @@
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
-use tokio::sync::Mutex;
+
+use tokio::sync::{Mutex, Notify};
 use tonic::{Request, Response, Status};
 use tracing::info;
 
@@ -11,7 +12,7 @@ use crate::core::worker::received_work_request::JobMessage;
 use crate::core::worker::MapJobRequest;
 use crate::jobs::{Job, JobQueue};
 use crate::minio::{Client, ClientConfig};
-use crate::worker_info::WorkerID;
+use crate::worker_info::{self, WorkerID};
 use crate::{
     jobs,
     worker_info::{Worker, WorkerState},
@@ -44,6 +45,7 @@ pub struct MRCoordinator {
     jobs: VecDeque<jobs::Job>,
     worker_registry: Arc<Mutex<WorkerRegistry>>,
     job_queue: Arc<Mutex<JobQueue>>,
+    job_queue_notifier: Arc<Notify>,
 }
 
 impl MRCoordinator {
@@ -53,6 +55,7 @@ impl MRCoordinator {
             jobs: VecDeque::new(),
             worker_registry: Arc::new(Mutex::new(WorkerRegistry::default())),
             job_queue: Arc::new(Mutex::new(JobQueue::new())),
+            job_queue_notifier: Arc::new(Notify::new()),
         }
     }
 
@@ -60,8 +63,19 @@ impl MRCoordinator {
         self.worker_registry.lock().await
     }
 
-    async fn get_job_queue(&self) -> tokio::sync::MutexGuard<'_, JobQueue> {
+    pub fn clone_job_queue(&self) -> Arc<Mutex<JobQueue>> {
+        self.job_queue.clone()
+    }
+    pub fn clone_job_queue_notifier(&self) -> Arc<Notify> {
+        self.job_queue_notifier.clone()
+    }
+
+    pub async fn get_job_queue(&self) -> tokio::sync::MutexGuard<'_, JobQueue> {
         self.job_queue.lock().await
+    }
+
+    pub fn clone_registry(&self) -> Arc<Mutex<WorkerRegistry>> {
+        self.worker_registry.clone()
     }
 
     async fn add_free_worker(&self, worker_id: WorkerID) {
@@ -205,7 +219,7 @@ impl Coordinator for MRCoordinator {
         let worker_id = request.into_inner().worker_id;
 
         {
-            // Only invalid the ID. No need to touch WorkerInfo.
+            // Only invalidate the ID. No need to touch WorkerInfo.
             let mut registry = self.get_registry().await;
             registry.delete_worker(worker_id);
         };
@@ -216,7 +230,7 @@ impl Coordinator for MRCoordinator {
         Ok(Response::new(reply))
     }
 
-    /// Adding free worker into the registry
+    /// Set worker with specified ID to `Free` state.
     async fn worker_task(
         &self,
         request: Request<WorkerTaskRequest>,
@@ -237,10 +251,14 @@ impl Coordinator for MRCoordinator {
         let task_request = request.into_inner();
         let job = Job::from_request(task_request);
 
+        // robert's map tester
+        // self._assign_work(&job, 0).await;
+
         {
             // Add job to the queue.
             let mut job_queue = self.get_job_queue().await;
             job_queue.push_job(job);
+            self.job_queue_notifier.notify_one();
         }
 
         let reply = AddJobResponse { success: true };

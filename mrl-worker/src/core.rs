@@ -63,6 +63,8 @@ impl Worker for MRWorker {
 
         let address = self.address.clone();
         let id = self.id.clone();
+        let client = self.client.clone();
+
         {
             let worker_id = id.lock().await;
             info!("Worker (ID={:?}) Received a work request", worker_id);
@@ -76,26 +78,26 @@ impl Worker for MRWorker {
 
         let work_request = request.into_inner();
 
+        tokio::task::spawn(async move {
+            let result = match work_request.job_message.unwrap() {
+                MapMessage(msg) => map::perform_map(msg, &client).await,
+                ReduceMessage(msg) => todo!(),
+            };
 
-        let result = match work_request.job_message.unwrap() {
-            MapMessage(msg) => map::perform_map(msg, &self.client).await,
-            ReduceMessage(msg) => todo!(),
-        };
+            let mut coordinator_connect = CoordinatorClient::connect(address.clone()).await;
+            let worker_id = id.lock().await.unwrap() as i32;
 
-        let mut coordinator_connect = CoordinatorClient::connect(address.clone()).await;
-        let worker_id = id.lock().await.unwrap() as i32;
+            if let Ok(mut client) = coordinator_connect {
+                let request = Request::new(WorkerDoneRequest { worker_id });
 
-        if let Ok(mut client) = coordinator_connect {
-            let request = Request::new(WorkerDoneRequest { worker_id });
-
-            if let Err(_) = client.worker_done(request).await {
-                error!("Worker (ID={}) failed to finish job", worker_id);
-            } else {
-                info!("Worker (ID={}) done with job", worker_id);
+                if let Err(_) = client.worker_done(request).await {
+                    error!("Worker (ID={}) failed to finish job", worker_id);
+                } else {
+                    info!("Worker (ID={}) done with job", worker_id);
+                }
             }
-        }
 
-
+        });
 
         let reply = ReceivedWorkResponse { success: true };
         Ok(Response::new(reply))

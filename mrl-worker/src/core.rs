@@ -79,14 +79,15 @@ impl Worker for MRWorker {
             let mut coordinator_connect = CoordinatorClient::connect(address).await;
 
 
+            let worker_id = (*id.lock().await).unwrap() as i32;
             if let Ok(mut client) = coordinator_connect {
-                let request = Request::new(WorkerDoneRequest { worker_id: (*id.lock().await).unwrap() as i32 });
+                let request = Request::new(WorkerDoneRequest { worker_id: worker_id  });
 
                 let resp = client.worker_done(request).await;
                 if resp.is_err() {
-                    error!("Failed to finish job");
+                    error!("Worker (ID={}) failed to finish job", (worker_id.clone()));
                 } else {
-                    info!("Worker done!")
+                    info!("Worker (ID={}) done with job", (worker_id.clone()));
                 }
             }
         });

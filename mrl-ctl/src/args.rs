@@ -31,6 +31,10 @@ pub enum Commands {
         #[arg(short, long)]
         output: String,
 
+        /// Timeout for worker executing a job
+        #[clap(short, long)]
+        timeout: Option<u32>,
+
         /// Auxiliary arguments to pass to the MapReduce application.
         #[clap(value_parser, last = true)]
         args: Vec<String>,

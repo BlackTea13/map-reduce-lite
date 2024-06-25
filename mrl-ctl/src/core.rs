@@ -1,3 +1,4 @@
+use clap::builder::TypedValueParser;
 //
 // Import gRPC stubs/definitions.
 //
@@ -10,6 +11,7 @@ pub mod coordinator {
 }
 
 const PORT: u16 = 8030;
+const TIMEOUT: u32 = 5;
 
 // Tasks
 pub async fn jobs() -> Result<(), Box<dyn std::error::Error>> {
@@ -38,13 +40,15 @@ pub async fn submit(
     output: String,
     workload: String,
     aux: Vec<String>,
+    timeout: Option<u32>
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut client = CoordinatorClient::connect(format!("http://[::1]:{}", PORT)).await?;
     let request = tonic::Request::new(AddJobRequest {
         input_files: input,
         output_files: output,
         workload,
-        aux,
+        timeout: timeout.unwrap_or(TIMEOUT),
+        aux
     });
     let response = client.add_job(request).await?;
     dbg!(response.into_inner());

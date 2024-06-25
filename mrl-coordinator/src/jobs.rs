@@ -43,6 +43,9 @@ pub struct Job {
 
     /// List of workers who are working on the job.
     workers: Vec<WorkerID>,
+
+    /// Timeout allowed before marked as straggler for worker
+    timeout: u32
 }
 
 impl Job {
@@ -57,6 +60,7 @@ impl Job {
             workload: request.workload,
             args: request.aux,
             workers: vec![],
+            timeout: request.timeout
         }
     }
 

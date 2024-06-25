@@ -32,6 +32,7 @@ struct Submit {
     workload: String,
     output: String,
     args: Vec<String>,
+    timeout: u32
 }
 
 pub enum WorkType {
@@ -131,7 +132,6 @@ impl MRCoordinator {
             let worker_status = format!("Worker (ID={:0>4}) - {:?}", index, worker.state);
             data.push(worker_status);
         }
-
         data
     }
 

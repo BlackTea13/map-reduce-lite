@@ -18,7 +18,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             workload,
             output,
             args,
-        } => core::submit(input, output, workload, args).await?,
+            timeout
+        } => core::submit(input, output, workload, args, timeout).await?,
     }
 
     Ok(())

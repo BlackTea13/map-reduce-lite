@@ -16,7 +16,7 @@ mod args;
 mod map;
 
 
-async fn start_server(port: u16,address: String, client_config: ClientConfig) {
+async fn start_server(port: u16, address: String, client_config: ClientConfig) {
     tokio::task::spawn(async move {
         let addr = format!("[::1]:{}", port).parse().unwrap();
         info!("Worker server listening on {}", addr);
@@ -30,7 +30,6 @@ async fn start_server(port: u16,address: String, client_config: ClientConfig) {
             .serve(addr)
             .await
             .unwrap();
-
     });
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await
 }

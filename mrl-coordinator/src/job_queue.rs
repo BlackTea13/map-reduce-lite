@@ -4,9 +4,10 @@
 
 use std::sync::Arc;
 
-use common::minio::Client;
 use tokio::sync::Mutex;
 use tracing::info;
+
+use common::minio::Client;
 
 use crate::{
     jobs::{Job, JobQueue},

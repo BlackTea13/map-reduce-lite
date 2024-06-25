@@ -17,6 +17,7 @@
 //!
 
 use anyhow::{bail, Result};
+
 use common::Workload;
 
 pub mod grep;

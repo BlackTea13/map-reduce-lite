@@ -4,20 +4,20 @@ use tokio::sync::{Mutex, Notify};
 use tonic::{Request, Response, Status};
 use tracing::info;
 
-pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
 use coordinator::*;
-pub use worker::{worker_client::WorkerClient, AckRequest, ReceivedWorkRequest};
+pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
+pub use worker::{AckRequest, ReceivedWorkRequest, worker_client::WorkerClient};
 
-use crate::core::worker::received_work_request::JobMessage;
-use crate::core::worker::MapJobRequest;
-use crate::jobs::{Job, JobQueue};
-use crate::minio::{Client, ClientConfig};
-use crate::worker_info::{self, WorkerID};
 use crate::{
     jobs,
     worker_info::{Worker, WorkerState},
     worker_registry::WorkerRegistry,
 };
+use crate::core::worker::MapJobRequest;
+use crate::core::worker::received_work_request::JobMessage;
+use crate::jobs::{Job, JobQueue};
+use crate::minio::{Client, ClientConfig};
+use crate::worker_info::{self, WorkerID};
 
 pub mod coordinator {
     tonic::include_proto!("coordinator");
@@ -87,7 +87,7 @@ impl MRCoordinator {
     async fn _assign_work(
         &self,
         worker_id: WorkerID,
-        input_file: String,
+        input_files: Vec<String>,
         output_file: String,
         work_type: WorkType,
         workload: String,
@@ -101,7 +101,7 @@ impl MRCoordinator {
         // TODO: send Map work for now, someone handle this when for reduce
         if let Some(worker) = registry.get_worker_mut(worker_id) {
             let map_message = MapJobRequest {
-                input_files: input_file,
+                input_keys: input_files,
                 workload,
                 aux,
             };
@@ -270,7 +270,6 @@ impl Coordinator for MRCoordinator {
         &self,
         request: Request<WorkerDoneRequest>,
     ) -> Result<Response<WorkerDoneResponse>, Status> {
-
         let worker_done_request = request.into_inner();
         let worker_id = worker_done_request.worker_id;
 

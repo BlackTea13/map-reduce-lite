@@ -1,7 +1,6 @@
 use std::net::SocketAddr;
 
 use tonic::Status;
-use tracing::info;
 
 use crate::worker_info::*;
 
@@ -28,7 +27,7 @@ impl WorkerRegistry {
         if worker_info.is_err() {
             vendor.delete_worker(worker_id)
         }
-        
+
         worker_info
     }
 

@@ -97,11 +97,6 @@ impl Job {
         &self.workers
     }
 
-    /// Mutable getter for workers
-    pub fn get_workers_mut(&mut self) -> &mut Vec<i32> {
-        &mut self.workers
-    }
-
     /// Add worker to job.
     pub fn add_worker(&mut self, worker_id: WorkerID) {
         self.workers.push(worker_id);

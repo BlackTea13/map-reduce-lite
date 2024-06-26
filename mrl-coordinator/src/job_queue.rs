@@ -144,6 +144,7 @@ async fn monitor_workers(registry: Arc<Mutex<WorkerRegistry>>, job: &mut Job) {
             info!("All workers are free, proceed to next stage");
         },
         _ = tokio::time::sleep(tokio::time::Duration::from_secs(timeout as u64)) => {
+            let stragglers = job.get_workers().into_iter().filter(|&worker_id| *worker_id != -1);
             info!("Stragglers detected");
         }
     }
@@ -153,8 +154,8 @@ async fn wait_workers_free(
     registry: Arc<Mutex<WorkerRegistry>>,
     job: &mut Job,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut workers = job.get_workers().clone();
-    let mut workers_working = job.get_workers().len();
+    let workers = job.get_workers_mut();
+    let mut workers_working = workers.len();
 
     while workers_working > 0 {
         for worker_id in workers.iter_mut() {

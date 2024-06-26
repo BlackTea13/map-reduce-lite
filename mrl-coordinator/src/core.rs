@@ -83,40 +83,6 @@ impl MRCoordinator {
         registry.set_worker_state(worker_id, WorkerState::Free);
     }
 
-    // TODO: partition input/output for mapper and reducers.
-    async fn _assign_work(
-        &self,
-        worker_id: WorkerID,
-        input_files: Vec<String>,
-        output_file: String,
-        work_type: WorkType,
-        workload: String,
-        aux: Vec<String>,
-    ) {
-        let mut registry = self.get_registry().await;
-        let work_state = WorkerState::from_work_type(work_type);
-
-        registry.set_worker_state(worker_id, work_state);
-
-        // TODO: send Map work for now, someone handle this when for reduce
-        if let Some(worker) = registry.get_worker_mut(worker_id) {
-            let map_message = MapJobRequest {
-                input_keys: input_files,
-                workload,
-                aux,
-            };
-
-            worker.set_state(WorkerState::Mapping);
-
-            let message = JobMessage::MapMessage(map_message);
-            let request = Request::new(ReceivedWorkRequest {
-                job_message: Some(message),
-            });
-
-            let response = worker.client.received_work(request).await.unwrap();
-        }
-    }
-
     async fn status(&self) -> Vec<String> {
         let registry = self.get_registry().await;
         let number_of_workers = registry.len();
@@ -250,9 +216,6 @@ impl Coordinator for MRCoordinator {
     ) -> Result<Response<AddJobResponse>, Status> {
         let task_request = request.into_inner();
         let job = Job::from_request(task_request);
-
-        // robert's map tester
-        // self._assign_work(&job, 0).await;
 
         {
             // Add job to the queue.

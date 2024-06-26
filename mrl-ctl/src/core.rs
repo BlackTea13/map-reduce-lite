@@ -44,13 +44,14 @@ pub async fn submit(
         input_files: input,
         output_files: output,
         workload,
-        aux,
+        aux
     });
     let response = client.add_job(request).await?;
     dbg!(response.into_inner());
 
     Ok(())
 }
+
 
 pub async fn status() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = CoordinatorClient::connect(format!("http://[::1]:{}", PORT)).await?;

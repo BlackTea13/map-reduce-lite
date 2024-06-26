@@ -4,7 +4,7 @@ use anyhow::{anyhow, Error};
 /// Helper functions and structures for dealing with minio.
 use aws_sdk_s3 as s3;
 use aws_sdk_s3::primitives::ByteStream;
-use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart};
+use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart, Object};
 use aws_smithy_types::byte_stream::Length;
 use bytes::Bytes;
 use globset::Glob;
@@ -87,12 +87,12 @@ impl Client {
         Ok(())
     }
 
-    pub async fn list_objects(&self, bucket: &str) -> Result<(), Error> {
+    pub async fn list_objects(&self, bucket: &str) -> Result<Vec<String>, Error> {
         self.list_objects_in_dir(bucket, "").await
     }
 
     /// Lists all objects found in the specified folder in S3.
-    pub async fn list_objects_in_dir(&self, bucket: &str, folder_path: &str) -> Result<(), Error> {
+    pub async fn list_objects_in_dir(&self, bucket: &str, folder_path: &str) -> Result<Vec<String>, Error> {
         let mut response = self
             .client
             .list_objects_v2()
@@ -102,11 +102,12 @@ impl Client {
             .into_paginator()
             .send();
 
+        let mut objects = vec![];
         while let Some(result) = response.next().await {
             match result {
                 Ok(output) => {
                     for object in output.contents() {
-                        info!(" - {}", object.key().unwrap_or("Unknown"));
+                        objects.push(object.key.clone().unwrap_or(String::from("Unknown")));
                     }
                 }
                 Err(err) => {
@@ -115,7 +116,7 @@ impl Client {
             }
         }
 
-        Ok(())
+        Ok(objects)
     }
 
     pub async fn delete_object(&self, bucket: &str, key: &str) -> Result<(), Error> {

@@ -83,6 +83,11 @@ impl WorkerRegistry {
         worker.state = new_state;
     }
 
+    /// Get worker's current state
+    pub fn get_worker_state(&self, worker_id: WorkerID) -> Option<WorkerState> {
+        self.get_worker(worker_id).map(|worker| worker.state)
+    }
+
     /// Retrieve free workers.
     pub fn get_free_workers(&self) -> Vec<WorkerID> {
         let vendor = &self.worker_vendor;
@@ -109,7 +114,6 @@ impl WorkerRegistry {
             .filter(|w| self.worker_vendor.worker_valid(w.id))
             .collect()
     }
-
 
     /// Get worker from registry based on worker_id
     pub fn get_worker(&self, worker_id: WorkerID) -> Option<&WorkerInfo> {

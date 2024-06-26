@@ -1,9 +1,6 @@
 use std::collections::VecDeque;
 
-use crate::{
-    core::coordinator::AddJobRequest,
-    worker_info::WorkerID,
-};
+use crate::{core::coordinator::AddJobRequest, worker_info::WorkerID};
 
 /// State of the job.
 #[derive(Debug, Clone, Copy)]
@@ -46,7 +43,7 @@ pub struct Job {
     workers: Vec<WorkerID>,
 
     /// Timeout allowed before marked as straggler for worker
-    timeout: u32
+    timeout: u32,
 }
 
 impl Job {
@@ -61,7 +58,7 @@ impl Job {
             workload: request.workload,
             args: request.aux,
             workers: vec![],
-            timeout: request.timeout
+            timeout: request.timeout,
         }
     }
 
@@ -88,6 +85,11 @@ impl Job {
     /// Get the state of the job.
     pub fn get_state(&self) -> JobState {
         self.state
+    }
+
+    /// Get task timeout
+    pub fn get_timeout(&self) -> u32 {
+        self.timeout
     }
 
     /// Get workers working on the job.

@@ -7,18 +7,17 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::info;
 
-use common::minio::Client;
-use crate::core::worker::MapJobRequest;
 use crate::core::worker::received_work_request::JobMessage;
+use crate::core::worker::MapJobRequest;
 use crate::core::ReceivedWorkRequest;
-
+use common::minio::Client;
 
 use crate::{
     jobs::{Job, JobQueue},
     worker_info::WorkerState,
     worker_registry::WorkerRegistry,
 };
-use tonic::{Request, Response, Status};
+use tonic::Request;
 
 pub async fn process_job_queue(
     client: Client,
@@ -51,12 +50,15 @@ async fn _process_job_queue(
     //       phases, we have to clear job worker list and call this
     //       again. We can't just call this again because we might
     //       add duplicates into the job's worker ID list.
+
     assign_workers_to_job(registry.clone(), job).await?;
 
     // Handle the job in stages.
 
     // 1. Mapping stage.
     process_map_job(&client, registry.clone(), job).await?;
+
+    monitor_workers(registry.clone(), job).await;
 
     set_job_worker_state(registry, job, WorkerState::Free).await?;
 
@@ -84,11 +86,12 @@ async fn process_map_job(
     registry: Arc<Mutex<WorkerRegistry>>,
     job: &mut Job,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-
-    let mut input_path = job.get_input_path().clone();
+    let input_path = job.get_input_path().clone();
     info!("Input path for map {}", input_path);
 
-    let input_files = client.list_objects_in_dir("robert", input_path.as_str()).await?;
+    let input_files = client
+        .list_objects_in_dir("robert", input_path.as_str())
+        .await?;
 
     let free_workers = registry.lock().await.get_free_workers();
     for (i, input) in input_files.chunks(free_workers.len()).enumerate() {
@@ -107,7 +110,6 @@ async fn process_map_job(
         };
 
         let request = Request::new(request);
-
 
         worker_client.received_work(request).await?;
     }
@@ -130,6 +132,43 @@ pub async fn set_job_worker_state(
         workers
             .iter()
             .for_each(|&worker_id| registry.set_worker_state(worker_id, state.clone()));
+    }
+
+    Ok(())
+}
+
+async fn monitor_workers(registry: Arc<Mutex<WorkerRegistry>>, job: &mut Job) {
+    let timeout = job.get_timeout().clone();
+    tokio::select! {
+        _ = wait_workers_free(registry.clone(), job) => {
+            info!("All workers are free, proceed to next stage");
+        },
+        _ = tokio::time::sleep(tokio::time::Duration::from_secs(timeout as u64)) => {
+            info!("Stragglers detected");
+        }
+    }
+}
+/// Wait until all the workers are free
+async fn wait_workers_free(
+    registry: Arc<Mutex<WorkerRegistry>>,
+    job: &mut Job,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut workers = job.get_workers().clone();
+    let mut workers_working = job.get_workers().len();
+
+    while workers_working > 0 {
+        for worker_id in workers.iter_mut() {
+            if *worker_id != -1 {
+                let registry = registry.lock().await;
+                if matches!(
+                    registry.get_worker_state(*worker_id),
+                    Some(WorkerState::Free)
+                ) {
+                    *worker_id = -1;
+                    workers_working -= 1;
+                }
+            }
+        }
     }
 
     Ok(())

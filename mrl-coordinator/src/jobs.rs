@@ -2,8 +2,9 @@ use std::collections::VecDeque;
 
 use crate::{
     core::coordinator::AddJobRequest,
-    worker_info::{WorkerID},
+    worker_info::WorkerID,
 };
+
 /// State of the job.
 #[derive(Debug, Clone, Copy)]
 pub enum JobState {

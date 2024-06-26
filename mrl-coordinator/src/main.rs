@@ -6,7 +6,6 @@ use tracing::info;
 use args::Args;
 use common::minio::{self, Client};
 use core::{CoordinatorServer, MRCoordinator};
-
 use job_queue::process_job_queue;
 
 use crate::jobs::JobQueue;

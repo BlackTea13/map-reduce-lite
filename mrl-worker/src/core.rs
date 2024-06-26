@@ -1,6 +1,8 @@
 use std::sync::Arc;
+
 use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
+use tonic::transport::Channel;
 use tracing::{debug, error, info};
 
 use common::minio::{Client, ClientConfig};
@@ -10,13 +12,12 @@ use common::minio::{Client, ClientConfig};
 pub use coordinator::{
     coordinator_client::CoordinatorClient, WorkerJoinRequest, WorkerLeaveRequest,
 };
-
-use crate::core::coordinator::WorkerDoneRequest;
-use crate::core::worker::worker_client::WorkerClient;
 pub use worker::{AckRequest, AckResponse, MapJobRequest, ReceivedWorkRequest, ReceivedWorkResponse};
 pub use worker::worker_server::{Worker, WorkerServer};
 
+use crate::core::coordinator::WorkerDoneRequest;
 use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceMessage};
+use crate::core::worker::worker_client::WorkerClient;
 use crate::map;
 
 pub mod coordinator {
@@ -26,12 +27,6 @@ pub mod coordinator {
 pub mod worker {
     tonic::include_proto!("worker");
 }
-
-
-use tonic::transport::Channel;
-
-
-
 
 
 #[derive(Debug, Default)]
@@ -60,7 +55,6 @@ impl Worker for MRWorker {
         &self,
         request: Request<ReceivedWorkRequest>,
     ) -> Result<Response<ReceivedWorkResponse>, Status> {
-
         let address = self.address.clone();
         let id = self.id.clone();
         let client = self.client.clone();
@@ -71,7 +65,7 @@ impl Worker for MRWorker {
 
             // Accept the work only if we are free
             match self.state {
-                WorkerState::Idle => {},
+                WorkerState::Idle => {}
                 WorkerState::InProgress => return Ok(Response::new(ReceivedWorkResponse { success: false })),
             }
         }
@@ -96,7 +90,6 @@ impl Worker for MRWorker {
                     info!("Worker (ID={}) done with job", worker_id);
                 }
             }
-
         });
 
         let reply = ReceivedWorkResponse { success: true };

@@ -3,8 +3,6 @@ use clap::builder::TypedValueParser;
 // Import gRPC stubs/definitions.
 //
 use crate::core::coordinator::StatusRequest;
-use coordinator::{coordinator_client::CoordinatorClient, JobsRequest, AddJobRequest};
-
 
 pub mod coordinator {
     tonic::include_proto!("coordinator");
@@ -55,6 +53,7 @@ pub async fn submit(
 
     Ok(())
 }
+
 
 pub async fn status() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = CoordinatorClient::connect(format!("http://[::1]:{}", PORT)).await?;

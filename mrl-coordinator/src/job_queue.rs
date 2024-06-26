@@ -4,15 +4,21 @@
 
 use std::sync::Arc;
 
-use common::minio::Client;
 use tokio::sync::Mutex;
 use tracing::info;
+
+use common::minio::Client;
+use crate::core::worker::MapJobRequest;
+use crate::core::worker::received_work_request::JobMessage;
+use crate::core::ReceivedWorkRequest;
+
 
 use crate::{
     jobs::{Job, JobQueue},
     worker_info::WorkerState,
     worker_registry::WorkerRegistry,
 };
+use tonic::{Request, Response, Status};
 
 pub async fn process_job_queue(
     client: Client,
@@ -78,13 +84,36 @@ async fn process_map_job(
     registry: Arc<Mutex<WorkerRegistry>>,
     job: &mut Job,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+
+    let mut input_path = job.get_input_path().clone();
+    info!("Input path for map {}", input_path);
+
+    let input_files = client.list_objects_in_dir("robert", input_path.as_str()).await?;
+
+    let free_workers = registry.lock().await.get_free_workers();
+    for (i, input) in input_files.chunks(free_workers.len()).enumerate() {
+        let worker_lock = registry.lock().await;
+        let worker = worker_lock.get_worker(free_workers[i].clone()).unwrap();
+        let mut worker_client = worker.client.clone();
+
+        let map_message = MapJobRequest {
+            input_keys: input.to_vec(),
+            workload: job.get_workload().clone(),
+            aux: job.get_args().clone(),
+        };
+
+        let request = ReceivedWorkRequest {
+            job_message: Some(JobMessage::MapMessage(map_message)),
+        };
+
+        let request = Request::new(request);
+
+
+        worker_client.received_work(request).await?;
+    }
+
     // Set all the workers' state.
-    set_job_worker_state(registry, job, WorkerState::Mapping).await?;
-
-    let input_path = job.get_input_path();
-
-    info!("{}", input_path);
-    client.list_objects_in_dir("robert", input_path).await?;
+    set_job_worker_state(registry.clone(), job, WorkerState::Mapping).await?;
 
     Ok(())
 }

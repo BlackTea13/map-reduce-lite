@@ -4,20 +4,20 @@ use tokio::sync::{Mutex, Notify};
 use tonic::{Request, Response, Status};
 use tracing::info;
 
-pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
 use coordinator::*;
-pub use worker::{worker_client::WorkerClient, AckRequest, ReceivedWorkRequest};
+pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
+pub use worker::{AckRequest, ReceivedWorkRequest, worker_client::WorkerClient};
 
-use crate::core::worker::received_work_request::JobMessage;
-use crate::core::worker::MapJobRequest;
-use crate::jobs::{Job, JobQueue};
-use crate::minio::{Client, ClientConfig};
-use crate::worker_info::{self, WorkerID};
 use crate::{
     jobs,
     worker_info::{Worker, WorkerState},
     worker_registry::WorkerRegistry,
 };
+use crate::core::worker::MapJobRequest;
+use crate::core::worker::received_work_request::JobMessage;
+use crate::jobs::{Job, JobQueue};
+use crate::minio::{Client, ClientConfig};
+use crate::worker_info::{self, WorkerID};
 
 pub mod coordinator {
     tonic::include_proto!("coordinator");
@@ -82,40 +82,6 @@ impl MRCoordinator {
     async fn add_free_worker(&self, worker_id: WorkerID) {
         let mut registry = self.get_registry().await;
         registry.set_worker_state(worker_id, WorkerState::Free);
-    }
-
-    // TODO: partition input/output for mapper and reducers.
-    async fn _assign_work(
-        &self,
-        worker_id: WorkerID,
-        input_file: String,
-        output_file: String,
-        work_type: WorkType,
-        workload: String,
-        aux: Vec<String>,
-    ) {
-        let mut registry = self.get_registry().await;
-        let work_state = WorkerState::from_work_type(work_type);
-
-        registry.set_worker_state(worker_id, work_state);
-
-        // TODO: send Map work for now, someone handle this when for reduce
-        if let Some(worker) = registry.get_worker_mut(worker_id) {
-            let map_message = MapJobRequest {
-                input_files: input_file,
-                workload,
-                aux,
-            };
-
-            worker.set_state(WorkerState::Mapping);
-
-            let message = JobMessage::MapMessage(map_message);
-            let request = Request::new(ReceivedWorkRequest {
-                job_message: Some(message),
-            });
-
-            let response = worker.client.received_work(request).await.unwrap();
-        }
     }
 
     async fn status(&self) -> Vec<String> {
@@ -251,9 +217,6 @@ impl Coordinator for MRCoordinator {
         let task_request = request.into_inner();
         let job = Job::from_request(task_request);
 
-        // robert's map tester
-        // self._assign_work(&job, 0).await;
-
         {
             // Add job to the queue.
             let mut job_queue = self.get_job_queue().await;
@@ -270,7 +233,6 @@ impl Coordinator for MRCoordinator {
         &self,
         request: Request<WorkerDoneRequest>,
     ) -> Result<Response<WorkerDoneResponse>, Status> {
-
         let worker_done_request = request.into_inner();
         let worker_id = worker_done_request.worker_id;
 

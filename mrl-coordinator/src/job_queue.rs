@@ -99,10 +99,12 @@ async fn process_map_job(
         .await?;
 
     let workers = job.get_workers();
+    let chunk_size = f32::ceil((input_files.len() as f32) / (workers.len() as f32)) as usize;
+    let jobs = input_files.chunks(chunk_size).zip(workers.iter());
 
-    for (i, input) in input_files.chunks(workers.len()).enumerate() {
+    for (input, worker) in jobs {
         let registry = registry.lock().await;
-        let worker = registry.get_worker(workers[i]).unwrap();
+        let worker = registry.get_worker(*worker).unwrap();
         let mut worker_client = worker.client.clone();
 
         let map_message = MapJobRequest {
@@ -142,13 +144,15 @@ async fn process_reduce_job(
 
     info!("Input path for reduce {output_path}");
 
-    for (i, input) in temp_output_files.chunks(workers.len()).enumerate() {
+    let jobs = temp_output_files.into_iter().zip(workers.iter());
+
+    for (input, worker) in jobs {
         let registry = registry.lock().await;
-        let worker = registry.get_worker(workers[i]).unwrap();
+        let worker = registry.get_worker(*worker).unwrap();
         let mut worker_client = worker.client.clone();
 
         let reduce_message = ReduceJobRequest {
-            input_keys: input.to_vec(),
+            input_keys: vec![input],
             workload: job.get_workload().clone(),
             aux: job.get_args().clone(),
         };

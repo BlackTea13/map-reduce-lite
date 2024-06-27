@@ -7,18 +7,17 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::info;
 
-use common::minio::Client;
 use crate::core::worker::MapJobRequest;
-use crate::core::worker::received_work_request::JobMessage;
+use crate::core::worker::{received_work_request::JobMessage, ReduceJobRequest};
 use crate::core::ReceivedWorkRequest;
-
+use common::minio::Client;
 
 use crate::{
     jobs::{Job, JobQueue},
     worker_info::WorkerState,
     worker_registry::WorkerRegistry,
 };
-use tonic::{Request, Response, Status};
+use tonic::Request;
 
 pub async fn process_job_queue(
     client: Client,
@@ -58,6 +57,14 @@ async fn _process_job_queue(
     // 1. Mapping stage.
     process_map_job(&client, registry.clone(), job).await?;
 
+    // TODO: Wait for workers to be complete.
+
+    // 2. Reduce stage.
+    process_reduce_job(&client, registry.clone(), job).await?;
+
+    // TODO: Wait for workers to be complete.
+
+    // TODO: This can be removed. Once we actually reset the state of workers.
     set_job_worker_state(registry, job, WorkerState::Free).await?;
 
     Ok(())
@@ -84,16 +91,18 @@ async fn process_map_job(
     registry: Arc<Mutex<WorkerRegistry>>,
     job: &mut Job,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-
-    let mut input_path = job.get_input_path().clone();
+    let input_path = job.get_input_path().clone();
     info!("Input path for map {}", input_path);
 
-    let input_files = client.list_objects_in_dir("robert", input_path.as_str()).await?;
+    let input_files = client
+        .list_objects_in_dir("robert", input_path.as_str())
+        .await?;
 
-    let free_workers = registry.lock().await.get_free_workers();
-    for (i, input) in input_files.chunks(free_workers.len()).enumerate() {
-        let worker_lock = registry.lock().await;
-        let worker = worker_lock.get_worker(free_workers[i].clone()).unwrap();
+    let workers = job.get_workers();
+
+    for (i, input) in input_files.chunks(workers.len()).enumerate() {
+        let registry = registry.lock().await;
+        let worker = registry.get_worker(workers[i]).unwrap();
         let mut worker_client = worker.client.clone();
 
         let map_message = MapJobRequest {
@@ -108,12 +117,52 @@ async fn process_map_job(
 
         let request = Request::new(request);
 
-
         worker_client.received_work(request).await?;
     }
 
     // Set all the workers' state.
     set_job_worker_state(registry.clone(), job, WorkerState::Mapping).await?;
+
+    Ok(())
+}
+
+/// Process reduce job.
+async fn process_reduce_job(
+    client: &Client,
+    registry: Arc<Mutex<WorkerRegistry>>,
+    job: &mut Job,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let workers = job.get_workers();
+    let output_path = job.get_output_path().clone();
+    let temp_output_path = format!("{output_path}/temp");
+
+    let temp_output_files = client
+        .list_objects_in_dir("robert", &temp_output_path)
+        .await?;
+
+    info!("Input path for reduce {output_path}");
+
+    for (i, input) in temp_output_files.chunks(workers.len()).enumerate() {
+        let registry = registry.lock().await;
+        let worker = registry.get_worker(workers[i]).unwrap();
+        let mut worker_client = worker.client.clone();
+
+        let reduce_message = ReduceJobRequest {
+            input_keys: input.to_vec(),
+            workload: job.get_workload().clone(),
+            aux: job.get_args().clone(),
+        };
+
+        let request = ReceivedWorkRequest {
+            job_message: Some(JobMessage::ReduceMessage(reduce_message)),
+        };
+
+        let request = Request::new(request);
+
+        worker_client.received_work(request).await?;
+    }
+
+    set_job_worker_state(registry.clone(), job, WorkerState::Reducing).await?;
 
     Ok(())
 }

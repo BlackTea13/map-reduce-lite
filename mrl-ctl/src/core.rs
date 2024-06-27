@@ -44,7 +44,7 @@ pub async fn submit(
         input_files: input,
         output_files: output,
         workload,
-        aux
+        aux,
     });
     let response = client.add_job(request).await?;
     dbg!(response.into_inner());

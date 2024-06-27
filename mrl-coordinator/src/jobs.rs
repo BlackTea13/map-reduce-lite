@@ -44,6 +44,7 @@ pub struct Job {
 
     /// List of workers who are working on the job.
     workers: Vec<WorkerID>,
+
 }
 
 impl Job {

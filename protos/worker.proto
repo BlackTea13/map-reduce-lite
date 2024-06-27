@@ -2,20 +2,24 @@ syntax = "proto3";
 package worker;
 
 message ReceivedWorkRequest {
+  uint32 num_workers = 1;
   oneof job_message {
-    MapJobRequest map_message = 1;
-    ReduceJobRequest reduce_message = 2;
+    MapJobRequest map_message = 2;
+    ReduceJobRequest reduce_message = 3;
   }
 }
 
 message MapJobRequest {
-  repeated string input_keys = 1;
-  string workload = 2;
-  repeated string aux = 3;
+  string bucket_in = 1;
+  repeated string input_keys = 2;
+  string bucket_out = 3;
+  string output_key = 4;
+  string workload = 5;
+  repeated string aux = 6;
 }
 
 message ReduceJobRequest {
-  repeated string input_keys = 1;
+  string input_key = 1;
   string workload = 2;
   repeated string aux = 3;
 }

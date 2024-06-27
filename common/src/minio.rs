@@ -6,13 +6,53 @@ use aws_sdk_s3 as s3;
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart, Object};
 use aws_smithy_types::byte_stream::Length;
-use bytes::Bytes;
+use aws_smithy_types::error::metadata::ProvideErrorMetadata;
+use bytes::{Bytes, BytesMut};
 use globset::Glob;
 use tokio::fs::File;
+use tokio::io::AsyncReadExt;
 use tokio::io::copy;
+use tokio_stream::StreamExt;
 use tracing::{debug, error, info};
+use url::Url;
+
+// Added line to import StreamExt
 
 const CHUNK_SIZE: u64 = 1024 * 1024 * 5;
+
+#[derive(Debug)]
+pub struct BucketKey {
+    pub bucket: String,
+    pub key: String,
+}
+
+/// retrieves a bucket and key for a given path, the path should contain the s3 protocol
+pub fn path_to_bucket_key(path: &str) -> Result<BucketKey, Error> {
+    let mut s3_url = Url::parse(path).map_err(|e| anyhow!("Could not parse input given: {}", e))?;
+
+    if s3_url.scheme() != "s3" {
+        return Err(anyhow!("protocol of path is not S3"));
+    }
+
+    while s3_url.path().ends_with('*') || s3_url.path().ends_with('/') {
+        if let Ok(mut segments) = s3_url.path_segments_mut() {
+            segments.pop_if_empty();
+            segments.pop();
+        }
+    }
+
+    let bucket = s3_url.domain().ok_or(anyhow!("something went wrong trying to retrieve bucket"))?;
+
+    let mut key = "";
+    if !s3_url.path().is_empty() {
+        key = &s3_url.path()[1..]; // we slice out the first `/` character
+    }
+
+    Ok(BucketKey {
+        bucket: bucket.to_string(),
+        key: key.to_string(),
+    })
+}
 
 #[derive(Clone)]
 pub struct ClientConfig {
@@ -92,12 +132,13 @@ impl Client {
     }
 
     /// Lists all objects found in the specified folder in S3.
-    pub async fn list_objects_in_dir(&self, bucket: &str, folder_path: &str) -> Result<Vec<String>, Error> {
+    /// the folder path argument expects a URL string, it will remove wildcard operators '*'
+    pub async fn list_objects_in_dir(&self, bucket: &str, key: &str) -> Result<Vec<String>, Error> {
         let mut response = self
             .client
             .list_objects_v2()
             .bucket(bucket)
-            .prefix(folder_path)
+            .prefix(key)
             .max_keys(50) // In this example, go 10 at a time.
             .into_paginator()
             .send();
@@ -117,6 +158,57 @@ impl Client {
         }
 
         Ok(objects)
+    }
+
+    pub async fn object_exists(
+        &self,
+        bucket: &str,
+        key: &str, // Path to the object
+    ) -> Result<bool, Error> {
+        let object_request = self.client
+            .head_object()
+            .bucket(bucket)
+            .key(key)
+            .send()
+            .await;
+
+        match object_request {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                if err.into_service_error().code() == Some("NotFound") {
+                    return Ok(false);
+                }
+                Err(anyhow!("something went wrong"))
+            }
+        }
+    }
+
+    pub async fn append_to_s3_object(&self, bucket_name: &str, object_key: &str, data_to_append: Bytes) -> Result<(), Error> {
+        let get_object_response = self.client
+            .get_object()
+            .bucket(bucket_name)
+            .key(object_key)
+            .send()
+            .await?;
+
+        let mut existing_data = Vec::new();
+
+        let _ = get_object_response
+            .body
+            .into_async_read()
+            .read_to_end(&mut existing_data).await?;
+
+        existing_data.extend_from_slice(&data_to_append);
+
+        self.client
+            .put_object()
+            .bucket(bucket_name)
+            .key(object_key)
+            .body(ByteStream::from(existing_data))
+            .send()
+            .await?;
+
+        Ok(())
     }
 
     pub async fn delete_object(&self, bucket: &str, key: &str) -> Result<(), Error> {
@@ -156,12 +248,11 @@ impl Client {
     }
 
     pub async fn download_object(&self, bucket: &str, key: &str, dir: &str) -> Result<(), Error> {
-        info!("Downloading object `{key}` from bucket `{bucket}` to directory `{dir}`");
+        debug!("Downloading object `{key}` from bucket `{bucket}` to directory `{dir}`");
         let file_name = format!(
             "{dir}/mr-in-{}",
             key.split('/').collect::<Vec<_>>().last().unwrap()
         );
-        debug!("Downloading file from S3.");
 
         // Define the part size (e.g., 5 MB)
         let part_size = 1 * 1024 * 1024;

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::collections::VecDeque;
 
 use crate::{core::coordinator::AddJobRequest, worker_info::WorkerID};
@@ -44,6 +45,9 @@ pub struct Job {
 
     /// Timeout allowed before marked as straggler for worker
     timeout: u32,
+
+    /// Hashmap to store the files each worker is working on
+    worker_files: HashMap<WorkerID, Vec<String>>,
 }
 
 impl Job {
@@ -59,6 +63,7 @@ impl Job {
             args: request.aux,
             workers: vec![],
             timeout: request.timeout,
+            worker_files: HashMap::new(),
         }
     }
 
@@ -107,6 +112,18 @@ impl Job {
         worker_ids
             .into_iter()
             .for_each(|worker_id| self.add_worker(worker_id));
+    }
+
+    pub fn set_worker_files(
+        &mut self,
+        worker_id: WorkerID,
+        files: Vec<String>,
+    ) -> Option<Vec<String>> {
+        self.worker_files.insert(worker_id, files)
+    }
+
+    pub fn get_worker_files(&self, worker_id: &WorkerID) -> Option<&Vec<String>> {
+        self.worker_files.get(worker_id)
     }
 }
 

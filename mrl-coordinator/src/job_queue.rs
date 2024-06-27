@@ -50,7 +50,6 @@ async fn _process_job_queue(
     //       phases, we have to clear job worker list and call this
     //       again. We can't just call this again because we might
     //       add duplicates into the job's worker ID list.
-
     assign_workers_to_job(registry.clone(), job).await?;
 
     // Handle the job in stages.
@@ -98,12 +97,15 @@ async fn process_map_job(
         let worker_lock = registry.lock().await;
         let worker = worker_lock.get_worker(free_workers[i].clone()).unwrap();
         let mut worker_client = worker.client.clone();
+        let inputs = input.to_vec();
 
         let map_message = MapJobRequest {
-            input_keys: input.to_vec(),
+            input_keys: inputs.clone(),
             workload: job.get_workload().clone(),
             aux: job.get_args().clone(),
         };
+
+        job.set_worker_files(worker.id, inputs.clone());
 
         let request = ReceivedWorkRequest {
             job_message: Some(JobMessage::MapMessage(map_message)),
@@ -137,17 +139,61 @@ pub async fn set_job_worker_state(
     Ok(())
 }
 
-async fn monitor_workers(registry: Arc<Mutex<WorkerRegistry>>, job: &mut Job) {
+/// Monitor for stragglers and handle them
+async fn monitor_workers(
+    registry: Arc<Mutex<WorkerRegistry>>,
+    job: &mut Job,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let timeout = job.get_timeout().clone();
+    let workload = job.get_workload().clone();
+    let aux = job.get_args().clone();
     tokio::select! {
         _ = wait_workers_free(registry.clone(), job) => {
             info!("All workers are free, proceed to next stage");
+            Ok(())
         },
         _ = tokio::time::sleep(tokio::time::Duration::from_secs(timeout as u64)) => {
+            let registry = registry.lock().await;
+            let job_clone = job.clone();
+            let stragglers: Vec<&i32> = job_clone.get_workers().iter()
+                .filter(|&worker_id| matches!(registry.get_worker_state(*worker_id), Some(WorkerState::Mapping)))
+                .collect();
+            let mut free_workers: Vec<&i32> = job_clone.get_workers().iter()
+                .filter(|&worker_id| matches!(registry.get_worker_state(*worker_id), Some(WorkerState::Free)))
+                .collect();
+
+
+            for straggler_id in stragglers {
+                if let Some(free_worker_id) = free_workers.pop() {
+                    let worker = registry.get_worker(*free_worker_id).unwrap();
+                    let mut worker_client = worker.client.clone();
+                    let straggler_input = job.get_worker_files(&straggler_id).unwrap();
+
+                    let map_message = MapJobRequest {
+                        input_keys: straggler_input.clone(),
+                        workload: workload.clone(),
+                        aux: aux.clone(),
+                    };
+
+                    job.set_worker_files(*free_worker_id, straggler_input.clone());
+
+                    let request = ReceivedWorkRequest {
+                        job_message: Some(JobMessage::MapMessage(map_message)),
+                    };
+
+                    let request = Request::new(request);
+
+                    job.set_worker_files(*free_worker_id, job.get_worker_files(&straggler_id).unwrap().clone());
+
+                    worker_client.received_work(request).await?;
+                }
+            }
             info!("Stragglers detected");
+            Ok(())
         }
     }
 }
+
 /// Wait until all the workers are free
 async fn wait_workers_free(
     registry: Arc<Mutex<WorkerRegistry>>,

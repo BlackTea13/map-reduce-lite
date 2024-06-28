@@ -2,7 +2,10 @@
 //! those tasks to workers running on a MapReduce cluster. For simplicity, data
 //! is kept on an S3-compatible system, unlike Hadoop or GFS.
 
+use std::fmt;
+use std::fmt::{Display, Formatter};
 use std::hash::Hasher;
+use std::str;
 
 use bytes::Bytes;
 use clap::{Parser, Subcommand};
@@ -60,6 +63,14 @@ pub struct KeyValue {
     pub value: Bytes,
 }
 
+impl fmt::Display for KeyValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let key_str = str::from_utf8(&self.key[..]).unwrap();
+        let value_str = str::from_utf8(&self.value[..]).unwrap();
+        write!(f, "{} {}", key_str, value_str)
+    }
+}
+
 impl KeyValue {
     /// Construct a new key-value pair from the given key and value.
     pub fn new(key: Bytes, value: Bytes) -> Self {
@@ -92,6 +103,12 @@ impl KeyValue {
     #[inline]
     pub fn into_value(self) -> Bytes {
         self.value
+    }
+
+    /// Consumes the pair and returns a string
+    #[inline]
+    pub fn to_string(self) -> String {
+        format!("{} {}", String::from_utf8(self.key.to_vec()).unwrap(), String::from_utf8(self.value.to_vec()).unwrap())
     }
 }
 

@@ -5,19 +5,21 @@
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
+use tonic::codegen::Body;
+use tonic::{Request, Response, Status};
 use tracing::info;
+use url::Url;
 
-use crate::core::worker::received_work_request::JobMessage;
+use common::minio::{path_to_bucket_key, Client};
+
 use crate::core::worker::MapJobRequest;
+use crate::core::worker::{received_work_request::JobMessage, ReduceJobRequest};
 use crate::core::ReceivedWorkRequest;
-use common::minio::Client;
-
 use crate::{
     jobs::{Job, JobQueue},
     worker_info::WorkerState,
     worker_registry::WorkerRegistry,
 };
-use tonic::Request;
 
 pub async fn process_job_queue(
     client: Client,
@@ -57,8 +59,25 @@ async fn _process_job_queue(
     // 1. Mapping stage.
     process_map_job(&client, registry.clone(), job).await?;
 
+    // Wait for workers to be complete.
     monitor_workers(registry.clone(), job).await;
 
+    // 2. Reduce stage.
+    process_reduce_job(&client, registry.clone(), job).await?;
+
+    // Wait for workers to be complete.
+    monitor_workers(registry.clone(), job).await;
+
+    // TODO: Wait for workers to be complete.
+    monitor_workers(registry.clone(), job).await;
+
+    // 2. Reduce stage.
+    process_reduce_job(&client, registry.clone(), job).await?;
+
+    // TODO: Wait for workers to be complete.
+    monitor_workers(registry.clone(), job).await;
+
+    // TODO: This can be removed. Once we actually reset the state of workers.
     set_job_worker_state(registry, job, WorkerState::Free).await?;
 
     Ok(())
@@ -85,22 +104,37 @@ async fn process_map_job(
     registry: Arc<Mutex<WorkerRegistry>>,
     job: &mut Job,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Set all the workers' state.
+    set_job_worker_state(registry.clone(), job, WorkerState::Mapping).await?;
+
     let input_path = job.get_input_path().clone();
+    let output_path = job.get_output_path().clone();
     info!("Input path for map {}", input_path);
 
-    let input_files = client
-        .list_objects_in_dir("robert", input_path.as_str())
-        .await?;
+    let input = path_to_bucket_key(&input_path)?;
+    let (bucket_in, key_in) = (input.bucket, input.key);
 
-    let free_workers = registry.lock().await.get_free_workers();
-    for (i, input) in input_files.chunks(free_workers.len()).enumerate() {
-        let worker_lock = registry.lock().await;
-        let worker = worker_lock.get_worker(free_workers[i].clone()).unwrap();
+    let output = path_to_bucket_key(&output_path)?;
+    let (bucket_out, key_out) = (output.bucket, output.key);
+
+    let input_files = client.list_objects_in_dir(&bucket_in, &key_in).await?;
+
+    let job_clone = job.clone();
+    let workers = job_clone.get_workers();
+    let chunk_size = f32::ceil((input_files.len() as f32) / (workers.len() as f32)) as usize;
+    let jobs = input_files.chunks(chunk_size).zip(workers.iter());
+
+    for (input, worker) in jobs {
+        let registry = registry.lock().await;
+        let worker = registry.get_worker(*worker).unwrap();
         let mut worker_client = worker.client.clone();
         let inputs = input.to_vec();
 
         let map_message = MapJobRequest {
-            input_keys: inputs.clone(),
+            bucket_in: bucket_in.clone(),
+            input_keys: input.to_vec(),
+            bucket_out: bucket_out.clone(),
+            output_key: key_out.clone(),
             workload: job.get_workload().clone(),
             aux: job.get_args().clone(),
         };
@@ -108,6 +142,7 @@ async fn process_map_job(
         job.set_worker_files(worker.id, inputs.clone());
 
         let request = ReceivedWorkRequest {
+            num_workers: workers.len() as u32,
             job_message: Some(JobMessage::MapMessage(map_message)),
         };
 
@@ -118,6 +153,50 @@ async fn process_map_job(
 
     // Set all the workers' state.
     set_job_worker_state(registry.clone(), job, WorkerState::Mapping).await?;
+    Ok(())
+}
+
+/// Process reduce job.
+async fn process_reduce_job(
+    client: &Client,
+    registry: Arc<Mutex<WorkerRegistry>>,
+    job: &mut Job,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let workers = job.get_workers();
+    let output_path = job.get_output_path().clone();
+    let temp_output_path = format!("{output_path}/temp");
+
+    let bucket_key = path_to_bucket_key(&output_path)?;
+    let (bucket, key) = (bucket_key.bucket, bucket_key.key);
+
+    let temp_output_files = client.list_objects_in_dir(&bucket, &key).await?;
+
+    info!("Input path for reduce {output_path}");
+
+    let jobs = temp_output_files.into_iter().zip(workers.iter());
+
+    for (input, worker) in jobs {
+        let registry = registry.lock().await;
+        let worker = registry.get_worker(*worker).unwrap();
+        let mut worker_client = worker.client.clone();
+
+        let reduce_message = ReduceJobRequest {
+            input_key: input.clone(),
+            workload: job.get_workload().clone(),
+            aux: job.get_args().clone(),
+        };
+
+        let request = ReceivedWorkRequest {
+            num_workers: workers.len() as u32,
+            job_message: Some(JobMessage::ReduceMessage(reduce_message)),
+        };
+
+        let request = Request::new(request);
+
+        worker_client.received_work(request).await?;
+    }
+
+    set_job_worker_state(registry.clone(), job, WorkerState::Reducing).await?;
 
     Ok(())
 }
@@ -147,6 +226,12 @@ async fn monitor_workers(
     let timeout = job.get_timeout().clone();
     let workload = job.get_workload().clone();
     let aux = job.get_args().clone();
+
+    let output_path = job.get_output_path().clone();
+
+    let output = path_to_bucket_key(&output_path)?;
+    let (bucket_out, key_out) = (output.bucket, output.key);
+
     tokio::select! {
         _ = wait_workers_free(registry.clone(), job) => {
             info!("All workers are free, proceed to next stage");
@@ -170,9 +255,12 @@ async fn monitor_workers(
                     let straggler_input = job.get_worker_files(&straggler_id).unwrap();
 
                     let map_message = MapJobRequest {
-                        input_keys: straggler_input.clone(),
-                        workload: workload.clone(),
-                        aux: aux.clone(),
+                        bucket_in: bucket_in.clone(),
+                        input_keys: straggler_input.to_vec(),
+                        bucket_out: bucket_out.clone(),
+                        output_key: format!("{}_straggler_copy", key_out.clone()),
+                        workload: workload,
+                        aux: aux,
                     };
 
                     job.set_worker_files(*free_worker_id, straggler_input.clone());

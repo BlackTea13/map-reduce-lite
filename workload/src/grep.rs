@@ -4,8 +4,9 @@
 use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use clap::Parser;
-use common::{KeyValue, MapOutput};
 use serde::{Deserialize, Serialize};
+
+use common::{KeyValue, MapOutput};
 
 #[derive(Parser, Debug, Serialize, Deserialize)]
 #[clap(no_binary_name = true)]
@@ -45,7 +46,7 @@ pub fn map(kv: KeyValue, aux: Bytes) -> MapOutput {
 
 pub fn reduce(
     key: Bytes,
-    values: Box<dyn Iterator<Item = Bytes> + '_>,
+    values: Box<dyn Iterator<Item=Bytes> + '_>,
     _aux: Bytes,
 ) -> Result<Bytes> {
     let mut writer = BytesMut::with_capacity(8);

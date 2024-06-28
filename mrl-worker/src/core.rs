@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
-use tonic::{Request, Response, Status};
+use tonic::{IntoRequest, Request, Response, Status};
 use tonic::transport::Channel;
 use tracing::{debug, error, info};
 
@@ -60,9 +60,6 @@ impl Worker for MRWorker {
         let client = self.client.clone();
 
         {
-            let worker_id = id.lock().await;
-            info!("Worker (ID={:?}) Received a work request", worker_id);
-
             // Accept the work only if we are free
             match self.state {
                 WorkerState::Idle => {}
@@ -73,21 +70,22 @@ impl Worker for MRWorker {
         let work_request = request.into_inner();
 
         tokio::task::spawn(async move {
-            let result = match work_request.job_message.unwrap() {
-                MapMessage(msg) => map::perform_map(msg, &client).await,
+            let id = id.clone().lock().await.unwrap();
+
+            let _ = match work_request.job_message.unwrap() {
+                MapMessage(msg) => map::perform_map(msg, &id, work_request.num_workers, &client, &address).await,
                 ReduceMessage(msg) => todo!(),
             };
 
-            let mut coordinator_connect = CoordinatorClient::connect(address.clone()).await;
-            let worker_id = id.lock().await.unwrap() as i32;
+            let coordinator_connect = CoordinatorClient::connect(address.clone()).await;
 
             if let Ok(mut client) = coordinator_connect {
-                let request = Request::new(WorkerDoneRequest { worker_id });
+                let request = Request::new(WorkerDoneRequest { worker_id: id as i32 });
 
                 if let Err(_) = client.worker_done(request).await {
-                    error!("Worker (ID={}) failed to finish job", worker_id);
+                    error!("Worker (ID={}) failed to finish job", id);
                 } else {
-                    info!("Worker (ID={}) done with job", worker_id);
+                    info!("Worker (ID={}) done with job", id);
                 }
             }
         });
@@ -98,6 +96,7 @@ impl Worker for MRWorker {
 
     async fn ack(&self, request: Request<AckRequest>) -> Result<Response<AckResponse>, Status> {
         let work_request = request.into_inner();
+        info!(work_request.worker_id);
         {
             let mut id = self.id.lock().await;
             *id = Some(work_request.worker_id);

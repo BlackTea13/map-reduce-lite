@@ -227,7 +227,13 @@ async fn monitor_workers(
     let workload = job.get_workload().clone();
     let aux = job.get_args().clone();
 
+    let input_path = job.get_input_path().clone();
     let output_path = job.get_output_path().clone();
+
+    info!("Input path for map {}", input_path);
+
+    let input = path_to_bucket_key(&input_path)?;
+    let (bucket_in, _) = (input.bucket, input.key);
 
     let output = path_to_bucket_key(&output_path)?;
     let (bucket_out, key_out) = (output.bucket, output.key);
@@ -259,13 +265,14 @@ async fn monitor_workers(
                         input_keys: straggler_input.to_vec(),
                         bucket_out: bucket_out.clone(),
                         output_key: format!("{}_straggler_copy", key_out.clone()),
-                        workload: workload,
-                        aux: aux,
+                        workload: workload.clone(),
+                        aux: aux.clone(),
                     };
 
                     job.set_worker_files(*free_worker_id, straggler_input.clone());
 
                     let request = ReceivedWorkRequest {
+                        num_workers: 1u32,
                         job_message: Some(JobMessage::MapMessage(map_message)),
                     };
 

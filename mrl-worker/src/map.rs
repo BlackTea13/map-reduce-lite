@@ -18,36 +18,25 @@ use common::{ihash, KeyValue};
 use common::minio::Client;
 
 use crate::core::{CoordinatorClient, MapJobRequest};
-use crate::core::coordinator::{AcquireLockRequest, InvalidateLockRequest};
 
 const WORKING_DIR: &str = "/var/tmp/";
 
 type BucketIndex = u32;
 type Buckets = DashMap<BucketIndex, Vec<KeyValue>>;
 
-pub async fn upload_objects(bucket: &str, path: &str, buckets: Buckets, client: &Client, coordinator_address: &String) -> Result<(), Error> {
-    let mut coordinator_client = CoordinatorClient::connect(coordinator_address.clone()).await?;
-
+pub async fn upload_objects(bucket: &str, path: &str, buckets: Buckets, worker_id: &u32, client: &Client, coordinator_address: &String) -> Result<(), Error> {
     for (index, records) in buckets {
         let records: Vec<String> = records.iter().map(|r| r.to_string()).collect();
         let contents = records.join("\n");
-        let out_key = format!("{path}/temp/mr-in-{index}");
+        let out_key = format!("{path}/temp/mr-in-{index}-{worker_id}");
 
-        let _ = coordinator_client.acquire_lock(AcquireLockRequest { object_key: out_key.clone() }).await?;
-
-        if client.object_exists(bucket, &out_key).await? {
-            client.append_to_s3_object(bucket, path, Bytes::from(contents)).await?;
-        } else {
-            client.put_object(bucket, &out_key, Bytes::from(contents)).await?;
-        }
-
-        let _ = coordinator_client.invalidate_lock(InvalidateLockRequest { object_key: out_key }).await?;
+        client.put_object(bucket, &out_key, Bytes::from(contents)).await?;
     }
 
     Ok(())
 }
 
-pub async fn perform_map(request: MapJobRequest, worker_id: &u32, num_workers: u32, client: &Client, address: &String) -> Result<(), Error> {
+pub async fn perform_map(request: MapJobRequest, worker_id: &u32, num_workers: u32, client: &Client, coordinator_address: &String) -> Result<(), Error> {
     let bucket_in = request.bucket_in;
     let bucket_out = request.bucket_out;
     let output_key = request.output_key;
@@ -114,7 +103,7 @@ pub async fn perform_map(request: MapJobRequest, worker_id: &u32, num_workers: u
         }
     });
 
-    upload_objects(&bucket_out, &output_key, buckets, client, address).await?;
+    upload_objects(&bucket_out, &output_key, buckets, worker_id, client, coordinator_address).await?;
 
     Ok(())
 }

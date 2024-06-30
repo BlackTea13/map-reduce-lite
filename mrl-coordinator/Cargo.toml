@@ -15,7 +15,6 @@ bytes = "1.6.0"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 url = "2.5.2"
-moka = { version = "0.12.7", features = ["sync"] }
 
 
 [build-dependencies]

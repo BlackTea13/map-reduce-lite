@@ -57,20 +57,6 @@ message WorkerDoneResponse {
   bool success = 1;
 }
 
-message AcquireLockRequest {
-  string object_key = 1;
-}
-
-message AcquireLockResponse {
-  bool lock = 1;
-}
-
-message InvalidateLockRequest {
-  string object_key = 1;
-}
-
-message InvalidateLockResponse {}
-
 service Coordinator {
   rpc Jobs (JobsRequest) returns (JobsResponse);
   rpc Status (StatusRequest) returns (StatusResponse);
@@ -79,7 +65,5 @@ service Coordinator {
   rpc WorkerTask (WorkerTaskRequest) returns (WorkerTaskResponse);
   rpc AddJob (AddJobRequest) returns (AddJobResponse);
   rpc WorkerDone (WorkerDoneRequest) returns (WorkerDoneResponse);
-  rpc AcquireLock (AcquireLockRequest) returns (AcquireLockResponse);
-  rpc InvalidateLock (InvalidateLockRequest) returns (InvalidateLockResponse);
 }
 

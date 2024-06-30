@@ -1,8 +1,5 @@
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
-use std::time::Duration;
 
-use moka::sync::Cache;
-use tokio::select;
 use tokio::sync::{Mutex, Notify};
 use tonic::{Request, Response, Status};
 use tracing::info;
@@ -16,11 +13,9 @@ use crate::{
     worker_info::{Worker, WorkerState},
     worker_registry::WorkerRegistry,
 };
-use crate::core::worker::MapJobRequest;
-use crate::core::worker::received_work_request::JobMessage;
 use crate::jobs::{Job, JobQueue};
 use crate::minio::{Client, ClientConfig};
-use crate::worker_info::{self, WorkerID};
+use crate::worker_info::{WorkerID};
 
 pub mod coordinator {
     tonic::include_proto!("coordinator");

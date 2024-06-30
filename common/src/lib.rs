@@ -3,7 +3,7 @@
 //! is kept on an S3-compatible system, unlike Hadoop or GFS.
 
 use std::fmt;
-use std::fmt::{Display, Formatter};
+use std::fmt::Formatter;
 use std::hash::Hasher;
 use std::str;
 

@@ -5,10 +5,8 @@
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
-use tonic::{Request, Response, Status};
-use tonic::codegen::Body;
+use tonic::{Request};
 use tracing::info;
-use url::Url;
 
 use common::minio::{Client, path_to_bucket_key};
 
@@ -104,7 +102,7 @@ async fn process_map_job(
     let (bucket_in, key_in) = (input.bucket, input.key);
 
     let output = path_to_bucket_key(&output_path)?;
-    let (bucket_out, key_out) = (output.bucket, output.key);
+    let (bucket_out, path_out) = (output.bucket, output.key);
 
     let input_files = client.list_objects_in_dir(&bucket_in, &key_in).await?;
 
@@ -121,7 +119,7 @@ async fn process_map_job(
             bucket_in: bucket_in.clone(),
             input_keys: input.to_vec(),
             bucket_out: bucket_out.clone(),
-            output_key: key_out.clone(),
+            output_path: path_out.clone(),
             workload: job.get_workload().clone(),
             aux: job.get_args().clone(),
         };

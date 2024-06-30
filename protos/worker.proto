@@ -13,7 +13,7 @@ message MapJobRequest {
   string bucket_in = 1;
   repeated string input_keys = 2;
   string bucket_out = 3;
-  string output_key = 4;
+  string output_path = 4;
   string workload = 5;
   repeated string aux = 6;
 }

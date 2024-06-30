@@ -1,23 +1,19 @@
 use std::fs;
 use std::path::Path;
-use std::ptr::null_mut;
 
 use anyhow::{anyhow, Error};
-use aws_sdk_s3 as s3;
 use bytes::Bytes;
 use dashmap::DashMap;
 use glob::glob;
-use reqwest::header::TE;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
-use tracing::{error, info};
-use url::Url;
+use tracing::{info};
 use walkdir::WalkDir;
 
 use common::{ihash, KeyValue};
 use common::minio::Client;
 
-use crate::core::{CoordinatorClient, MapJobRequest};
+use crate::core::{MapJobRequest};
 
 const WORKING_DIR: &str = "/var/tmp/";
 
@@ -39,7 +35,7 @@ pub async fn upload_objects(bucket: &str, path: &str, buckets: Buckets, worker_i
 pub async fn perform_map(request: MapJobRequest, worker_id: &u32, num_workers: u32, client: &Client, coordinator_address: &String) -> Result<(), Error> {
     let bucket_in = request.bucket_in;
     let bucket_out = request.bucket_out;
-    let output_key = request.output_key;
+    let output_key = request.output_path;
     let input_keys = request.input_keys;
     let workload = request.workload;
     let aux = request.aux;

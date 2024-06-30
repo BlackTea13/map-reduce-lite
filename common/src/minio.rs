@@ -4,15 +4,14 @@ use anyhow::{anyhow, Error};
 /// Helper functions and structures for dealing with minio.
 use aws_sdk_s3 as s3;
 use aws_sdk_s3::primitives::ByteStream;
-use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart, Object};
+use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart};
 use aws_smithy_types::byte_stream::Length;
 use aws_smithy_types::error::metadata::ProvideErrorMetadata;
-use bytes::{Bytes, BytesMut};
+use bytes::{Bytes};
 use globset::Glob;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 use tokio::io::copy;
-use tokio_stream::StreamExt;
 use tracing::{debug, error, info};
 use url::Url;
 

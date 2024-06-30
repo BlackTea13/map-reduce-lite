@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
-use tonic::{IntoRequest, Request, Response, Status};
-use tonic::transport::Channel;
-use tracing::{debug, error, info};
+use tonic::{Request, Response, Status};
+use tracing::{error, info};
 
 use common::minio::{Client, ClientConfig};
 //
@@ -17,7 +16,6 @@ pub use worker::worker_server::{Worker, WorkerServer};
 
 use crate::core::coordinator::WorkerDoneRequest;
 use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceMessage};
-use crate::core::worker::worker_client::WorkerClient;
 use crate::map;
 
 pub mod coordinator {

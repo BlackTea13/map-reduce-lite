@@ -5,19 +5,19 @@
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
-use tonic::{Request};
+use tonic::Request;
 use tracing::info;
 
-use common::minio::{Client, path_to_bucket_key};
+use common::minio::{path_to_bucket_key, Client};
 
+use crate::core::worker::MapJobRequest;
+use crate::core::worker::{received_work_request::JobMessage, ReduceJobRequest};
+use crate::core::ReceivedWorkRequest;
 use crate::{
     jobs::{Job, JobQueue},
     worker_info::WorkerState,
     worker_registry::WorkerRegistry,
 };
-use crate::core::ReceivedWorkRequest;
-use crate::core::worker::{received_work_request::JobMessage, ReduceJobRequest};
-use crate::core::worker::MapJobRequest;
 
 pub async fn process_job_queue(
     client: Client,
@@ -137,36 +137,47 @@ async fn process_map_job(
     Ok(())
 }
 
+async fn get_reduce_input_files(
+    client: &Client,
+    bucket: &str,
+    key: &str,
+    index: usize,
+) -> Result<Vec<String>, anyhow::Error> {
+    let dir = format!("{}/temp/mr-in-{}", &key, index);
+
+    client.list_objects_in_dir(&bucket, &dir).await
+}
+
 /// Process reduce job.
 async fn process_reduce_job(
     client: &Client,
     registry: Arc<Mutex<WorkerRegistry>>,
     job: &mut Job,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    set_job_worker_state(registry.clone(), job, WorkerState::Reducing).await?;
+
+    // Where output files are written to. (dir)
+    let output_root = job.get_output_path();
+
+    let bucket_key = path_to_bucket_key(&output_root)?;
+    let (bucket, output_key) = (bucket_key.bucket, bucket_key.key);
+
     let workers = job.get_workers();
-    let output_path = job.get_output_path().clone();
-    let temp_output_path = format!("{output_path}/temp");
 
-    let bucket_key = path_to_bucket_key(&output_path)?;
-    let (bucket, key) = (bucket_key.bucket, bucket_key.key);
-
-    let temp_output_files = client
-        .list_objects_in_dir(&bucket, &key)
-        .await?;
-
-    info!("Input path for reduce {output_path}");
-
-    let jobs = temp_output_files.into_iter().zip(workers.iter());
-
-    for (input, worker) in jobs {
+    for (index, worker) in workers.iter().enumerate() {
         let registry = registry.lock().await;
         let worker = registry.get_worker(*worker).unwrap();
         let mut worker_client = worker.client.clone();
 
+        let inputs = get_reduce_input_files(client, &bucket, &output_key, index).await?;
+        let output = format!("{}/mr-out-{}", &output_key, index);
+
         let reduce_message = ReduceJobRequest {
-            input_key: input.clone(),
-            workload: job.get_workload().clone(),
+            bucket: bucket.clone(),
+            inputs,
+            output,
             aux: job.get_args().clone(),
+            workload: job.get_workload().clone(),
         };
 
         let request = ReceivedWorkRequest {
@@ -178,8 +189,6 @@ async fn process_reduce_job(
 
         worker_client.received_work(request).await?;
     }
-
-    set_job_worker_state(registry.clone(), job, WorkerState::Reducing).await?;
 
     Ok(())
 }

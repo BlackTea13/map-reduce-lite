@@ -14,18 +14,24 @@ use tracing::{error, info};
 use url::Url;
 use walkdir::WalkDir;
 
-use common::{ihash, KeyValue};
 use common::minio::Client;
+use common::{ihash, KeyValue};
 
-use crate::core::{CoordinatorClient, MapJobRequest};
 use crate::core::coordinator::{AcquireLockRequest, InvalidateLockRequest};
+use crate::core::{CoordinatorClient, MapJobRequest};
 
 const WORKING_DIR: &str = "/var/tmp/";
 
 type BucketIndex = u32;
 type Buckets = DashMap<BucketIndex, Vec<KeyValue>>;
 
-pub async fn upload_objects(bucket: &str, path: &str, buckets: Buckets, client: &Client, coordinator_address: &String) -> Result<(), Error> {
+pub async fn upload_objects(
+    bucket: &str,
+    path: &str,
+    buckets: Buckets,
+    client: &Client,
+    coordinator_address: &String,
+) -> Result<(), Error> {
     let mut coordinator_client = CoordinatorClient::connect(coordinator_address.clone()).await?;
 
     for (index, records) in buckets {
@@ -33,21 +39,50 @@ pub async fn upload_objects(bucket: &str, path: &str, buckets: Buckets, client: 
         let contents = records.join("\n");
         let out_key = format!("{path}/temp/mr-in-{index}");
 
-        let _ = coordinator_client.acquire_lock(AcquireLockRequest { object_key: out_key.clone() }).await?;
+        let _ = coordinator_client
+            .acquire_lock(AcquireLockRequest {
+                object_key: out_key.clone(),
+            })
+            .await?;
 
         if client.object_exists(bucket, &out_key).await? {
-            client.append_to_s3_object(bucket, path, Bytes::from(contents)).await?;
+            client
+                .append_to_s3_object(bucket, path, Bytes::from(contents))
+                .await?;
         } else {
-            client.put_object(bucket, &out_key, Bytes::from(contents)).await?;
+            client
+                .put_object(bucket, &out_key, Bytes::from(contents))
+                .await?;
         }
 
-        let _ = coordinator_client.invalidate_lock(InvalidateLockRequest { object_key: out_key }).await?;
+        info!("{}", &out_key);
+
+        let _ = coordinator_client
+            .invalidate_lock(InvalidateLockRequest {
+                object_key: out_key.clone(),
+            })
+            .await?;
+
+        // Wait for object to exist because of S3's upload latency
+        // Ref: https://stackoverflow.com/questions/8856316/amazon-s3-how-to-deal-with-the-delay-from-upload-to-object-availability
+        while !client.object_exists(&bucket, &out_key).await? {
+            info!("object doesssnt exists!!");
+        }
     }
 
     Ok(())
 }
 
-pub async fn perform_map(request: MapJobRequest, worker_id: &u32, num_workers: u32, client: &Client, address: &String) -> Result<(), Error> {
+pub async fn perform_map(
+    request: MapJobRequest,
+    worker_id: &u32,
+    num_workers: u32,
+    client: &Client,
+    address: &String,
+) -> Result<(), Error> {
+    if *worker_id & 1 == 1 {
+        tokio::time::sleep(tokio::time::Duration::from_secs(10000)).await;
+    }
     let bucket_in = request.bucket_in;
     let bucket_out = request.bucket_out;
     let output_key = request.output_key;
@@ -59,7 +94,12 @@ pub async fn perform_map(request: MapJobRequest, worker_id: &u32, num_workers: u
 
     let workload = match workload::try_named(&workload) {
         Some(wl) => wl,
-        None => return Err(anyhow!("The workload `{}` is not a known workload", workload)),
+        None => {
+            return Err(anyhow!(
+                "The workload `{}` is not a known workload",
+                workload
+            ))
+        }
     };
 
     let target_dir = format!("{WORKING_DIR}mrl-{worker_id}");
@@ -69,7 +109,9 @@ pub async fn perform_map(request: MapJobRequest, worker_id: &u32, num_workers: u
     }
 
     for key in input_keys {
-        client.download_object(&bucket_in, &key, &target_dir).await?;
+        client
+            .download_object(&bucket_in, &key, &target_dir)
+            .await?;
     }
 
     let map_fn = workload.map_fn;
@@ -118,5 +160,3 @@ pub async fn perform_map(request: MapJobRequest, worker_id: &u32, num_workers: u
 
     Ok(())
 }
-
-

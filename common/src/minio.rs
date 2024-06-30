@@ -128,6 +128,39 @@ impl Client {
         Ok(())
     }
 
+    pub async fn move_objects(
+        &self,
+        bucket: &str,
+        source_path: &str,
+        destination_path: &str,
+    ) -> Result<(), Error> {
+        let source_objects = self.list_objects_in_dir(bucket, source_path).await?;
+
+        info!("{:?}", &source_objects);
+
+        for source_object in source_objects {
+            let destination_key = format!(
+                "{}/{}",
+                destination_path,
+                source_object
+                    .trim_start_matches(source_path)
+                    .trim_start_matches('/')
+            );
+
+            info!("{}", &destination_key);
+
+            self.copy_object(bucket, &source_object, &destination_key)
+                .await?;
+
+            match self.delete_object(bucket, &source_object).await {
+                Ok(_) => todo!(),
+                Err(e) => dbg!(e.to_string()),
+            };
+        }
+
+        Ok(())
+    }
+
     pub async fn copy_object(
         &self,
         bucket: &str,
@@ -253,6 +286,7 @@ impl Client {
     }
 
     pub async fn delete_object(&self, bucket: &str, key: &str) -> Result<(), Error> {
+        info!("{}/{}", bucket, key);
         self.client
             .delete_object()
             .bucket(bucket)

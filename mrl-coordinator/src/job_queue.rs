@@ -8,7 +8,7 @@ use tokio::select;
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 use tonic::Request;
-use tracing::info;
+use tracing::{debug, info};
 use url::Url;
 
 use common::minio::{path_to_bucket_key, Client};
@@ -34,9 +34,6 @@ pub async fn process_job_queue(
     };
 
     let result = _process_job_queue(&mut job, client, registry.clone()).await;
-
-    // Ensure worker states are resetted.
-    set_job_worker_state(registry, &mut job, WorkerState::Free).await?;
 
     result
 }
@@ -65,13 +62,10 @@ async fn _process_job_queue(
     monitor_workers(&client, registry.clone(), job, WorkerState::Mapping).await?;
 
     // 2. Reduce stage.
-    process_reduce_job(&client, registry.clone(), job).await?;
+    //process_reduce_job(&client, registry.clone(), job).await?;
 
     // Wait for workers to be complete.
-    monitor_workers(&client, registry.clone(), job, WorkerState::Reducing).await?;
-
-    // TODO: This can be removed. Once we actually reset the state of workers.
-    set_job_worker_state(registry, job, WorkerState::Free).await?;
+    //monitor_workers(&client, registry.clone(), job, WorkerState::Reducing).await?;
 
     Ok(())
 }
@@ -227,7 +221,7 @@ async fn monitor_workers(
         },
         _ = tokio::time::sleep(tokio::time::Duration::from_secs(timeout as u64)) => {
             info!("Stragglers detected...");
-            handling_stragglers(&client,registry.clone(), job, current_state);
+            let _ = handling_stragglers(&client,registry.clone(), job, current_state).await;
 
             Ok(())
         }
@@ -249,7 +243,7 @@ async fn handling_stragglers(
         .filter(|&worker_id| {
             matches!(
                 registry_lock.get_worker_state(*worker_id),
-                Some(current_state)
+                Some(WorkerState::Mapping)
             )
         })
         .collect();
@@ -269,11 +263,10 @@ async fn handling_stragglers(
         if let Some(free_worker_id) = free_workers.pop() {
             let straggler_input = job_clone.get_worker_files(&straggler_id).unwrap();
 
-            let registry_lock = registry.lock().await;
-            let worker = registry_lock.get_worker(*free_worker_id).unwrap().clone();
+            let worker = registry_lock.get_worker(*free_worker_id).unwrap();
             let mut worker_client = worker.client.clone();
 
-            job.set_worker_files(*free_worker_id, straggler_input.clone());
+            // job.set_worker_files(*free_worker_id, straggler_input.clone());
 
             job.set_worker_files(
                 *free_worker_id,
@@ -288,6 +281,9 @@ async fn handling_stragglers(
             let straggler_id = straggler_id.clone();
             let registry = registry.clone();
             let mut job = job.clone();
+
+            info!("Commencing a race between free and straggler!!!");
+
             tokio::spawn(async move {
                 straggler_vs_free_worker(
                     &client_clone,
@@ -326,7 +322,7 @@ async fn create_straggler_request(
             bucket_in: bucket_in,
             input_keys: straggler_input.to_vec(),
             bucket_out: bucket_out,
-            output_key: format!("{}_straggler_copy", key_out),
+            output_key: format!("{}/temp/straggler_copy", key_out),
             workload: workload,
             aux: aux,
         };
@@ -341,7 +337,7 @@ async fn create_straggler_request(
             bucket_in: bucket_in,
             input_keys: straggler_input.to_vec(),
             bucket_out: bucket_out,
-            output_key: format!("{}_straggler_copy", key_out),
+            output_key: format!("{}/temp/straggler_copy", key_out),
             workload: workload,
             aux: aux,
         };
@@ -365,16 +361,24 @@ async fn straggler_vs_free_worker(
     let (bucket_out, key_out) = (output.bucket, output.key);
 
     select! {
-        _ = wait_for_worker_to_become_free(registry.clone(), straggler_id) => {
-            println!("Straggler worker {} is done", straggler_id);
-            client.delete_object(&bucket_out, &format!("{}_straggler_copy", key_out)).await?;
-        },
         _ = wait_for_worker_to_become_free(registry.clone(), free_worker_id) => {
-            println!("Free worker {} is done", free_worker_id);
-            client.rename_object(&bucket_out, &format!("{}_straggler_copy", key_out), &key_out).await?;
+            info!("Free worker {} is done", free_worker_id);
+
+            let key_prefix = "temp/straggler_copy/temp";
+
+            // Wait for object to exist because of S3's upload latency
+            // Ref: https://stackoverflow.com/questions/8856316/amazon-s3-how-to-deal-with-the-delay-from-upload-to-object-availability
+            while client.list_objects_in_dir(&bucket_out, &key_prefix).await?.is_empty() {
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            }
+            client.move_objects(&bucket_out,"temp/straggler_copy/temp","temp").await?;
+        },
+        _ = wait_for_worker_to_become_free(registry.clone(), straggler_id) => {
+            info!("Straggler worker {} is done", straggler_id);
+            //client.move_objects(&bucket_out,&format!("{}/straggler_copy" , key_out).await?;
         },
         _ = tokio::time::sleep(tokio::time::Duration::from_secs(30)) => {
-            println!("Timeout waiting for workers to become free");
+            info!("Timeout waiting for workers to become free");
         },
     }
 

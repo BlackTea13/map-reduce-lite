@@ -1,5 +1,5 @@
-use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
 use std::time::Duration;
+use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
 
 use moka::sync::Cache;
 use tokio::select;
@@ -248,6 +248,7 @@ impl Coordinator for MRCoordinator {
 
         let mut registry = self.get_registry().await;
         if let Some(worker) = registry.get_worker_mut(worker_id) {
+            dbg!(&worker_id);
             worker.set_state(WorkerState::Free)
         }
 
@@ -255,7 +256,10 @@ impl Coordinator for MRCoordinator {
         Ok(Response::new(reply))
     }
 
-    async fn acquire_lock(&self, request: Request<AcquireLockRequest>) -> Result<Response<AcquireLockResponse>, Status> {
+    async fn acquire_lock(
+        &self,
+        request: Request<AcquireLockRequest>,
+    ) -> Result<Response<AcquireLockResponse>, Status> {
         let request = request.into_inner();
         let object_key = request.object_key;
 
@@ -270,7 +274,10 @@ impl Coordinator for MRCoordinator {
         Ok(Response::new(reply))
     }
 
-    async fn invalidate_lock(&self, request: Request<InvalidateLockRequest>) -> Result<Response<InvalidateLockResponse>, Status> {
+    async fn invalidate_lock(
+        &self,
+        request: Request<InvalidateLockRequest>,
+    ) -> Result<Response<InvalidateLockResponse>, Status> {
         let request = request.into_inner();
         let object_key = request.object_key;
 

@@ -1,24 +1,19 @@
 use std::fs;
 use std::path::Path;
-use std::ptr::null_mut;
 
 use anyhow::{anyhow, Error};
-use aws_sdk_s3 as s3;
 use bytes::Bytes;
 use dashmap::DashMap;
 use glob::glob;
-use reqwest::header::TE;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
-use tracing::{error, info};
-use url::Url;
+use tracing::{info};
 use walkdir::WalkDir;
 
 use common::minio::Client;
 use common::{ihash, KeyValue};
 
-use crate::core::coordinator::{AcquireLockRequest, InvalidateLockRequest};
-use crate::core::{CoordinatorClient, MapJobRequest};
+use crate::core::{MapJobRequest};
 
 const WORKING_DIR: &str = "/var/tmp/";
 
@@ -37,37 +32,9 @@ pub async fn upload_objects(
     for (index, records) in buckets {
         let records: Vec<String> = records.iter().map(|r| r.to_string()).collect();
         let contents = records.join("\n");
-        let out_key = format!("{path}/temp/mr-in-{index}");
+        let out_key = format!("{path}/temp/mr-in-{index}-{worker_id}");
 
-        let _ = coordinator_client
-            .acquire_lock(AcquireLockRequest {
-                object_key: out_key.clone(),
-            })
-            .await?;
-
-        if client.object_exists(bucket, &out_key).await? {
-            client
-                .append_to_s3_object(bucket, path, Bytes::from(contents))
-                .await?;
-        } else {
-            client
-                .put_object(bucket, &out_key, Bytes::from(contents))
-                .await?;
-        }
-
-        info!("{}", &out_key);
-
-        let _ = coordinator_client
-            .invalidate_lock(InvalidateLockRequest {
-                object_key: out_key.clone(),
-            })
-            .await?;
-
-        // Wait for object to exist because of S3's upload latency
-        // Ref: https://stackoverflow.com/questions/8856316/amazon-s3-how-to-deal-with-the-delay-from-upload-to-object-availability
-        while !client.object_exists(&bucket, &out_key).await? {
-            info!("object doesssnt exists!!");
-        }
+        client.put_object(bucket, &out_key, Bytes::from(contents)).await?;
     }
 
     Ok(())
@@ -85,7 +52,7 @@ pub async fn perform_map(
     }
     let bucket_in = request.bucket_in;
     let bucket_out = request.bucket_out;
-    let output_key = request.output_key;
+    let output_key = request.output_path;
     let input_keys = request.input_keys;
     let workload = request.workload;
     let aux = request.aux;
@@ -156,7 +123,7 @@ pub async fn perform_map(
         }
     });
 
-    upload_objects(&bucket_out, &output_key, buckets, client, address).await?;
+    upload_objects(&bucket_out, &output_key, buckets, worker_id, client, coordinator_address).await?;
 
     Ok(())
 }

@@ -1,12 +1,10 @@
 use clap::Parser;
 use tokio::signal;
-use tokio::sync::oneshot;
-use tokio::sync::oneshot::Receiver;
-use tonic::transport::{Channel, Server};
+use tonic::transport::Server;
 use tracing::{error, info};
 
 use args::Args;
-use common::minio::{Client, ClientConfig};
+use common::minio::{ClientConfig};
 use core::{CoordinatorClient, MRWorker, WorkerJoinRequest, WorkerLeaveRequest, WorkerServer};
 
 mod core;

@@ -1,8 +1,6 @@
 use std::time::Duration;
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
 
-use moka::sync::Cache;
-use tokio::select;
 use tokio::sync::{Mutex, Notify};
 use tonic::{Request, Response, Status};
 use tracing::info;
@@ -48,7 +46,6 @@ pub struct MRCoordinator {
     worker_registry: Arc<Mutex<WorkerRegistry>>,
     job_queue: Arc<Mutex<JobQueue>>,
     job_queue_notifier: Arc<Notify>,
-    object_locks: Cache<String, WorkerID>,
 }
 
 impl MRCoordinator {
@@ -59,10 +56,6 @@ impl MRCoordinator {
             worker_registry: Arc::new(Mutex::new(WorkerRegistry::default())),
             job_queue: Arc::new(Mutex::new(JobQueue::new())),
             job_queue_notifier: Arc::new(Notify::new()),
-            object_locks: Cache::builder()
-                .time_to_live(Duration::from_secs(5))
-                .max_capacity(1000)
-                .build(),
         }
     }
 
@@ -253,37 +246,6 @@ impl Coordinator for MRCoordinator {
         }
 
         let reply = WorkerDoneResponse { success: true };
-        Ok(Response::new(reply))
-    }
-
-    async fn acquire_lock(
-        &self,
-        request: Request<AcquireLockRequest>,
-    ) -> Result<Response<AcquireLockResponse>, Status> {
-        let request = request.into_inner();
-        let object_key = request.object_key;
-
-        // may want to time out this
-        while self.object_locks.contains_key(&object_key) {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-
-        self.object_locks.insert(object_key, 0);
-
-        let reply = AcquireLockResponse { lock: true };
-        Ok(Response::new(reply))
-    }
-
-    async fn invalidate_lock(
-        &self,
-        request: Request<InvalidateLockRequest>,
-    ) -> Result<Response<InvalidateLockResponse>, Status> {
-        let request = request.into_inner();
-        let object_key = request.object_key;
-
-        self.object_locks.invalidate(&object_key);
-
-        let reply = InvalidateLockResponse {};
         Ok(Response::new(reply))
     }
 }

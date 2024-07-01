@@ -13,15 +13,23 @@ message MapJobRequest {
   string bucket_in = 1;
   repeated string input_keys = 2;
   string bucket_out = 3;
-  string output_key = 4;
+  string output_path = 4;
   string workload = 5;
   repeated string aux = 6;
 }
 
 message ReduceJobRequest {
-  string input_key = 1;
-  string workload = 2;
-  repeated string aux = 3;
+  // Work is done in one bucket.
+  string bucket = 1;
+
+  // The location for the input files. (dir)
+  repeated string inputs = 2;
+
+  // The location for the output file. (dir)
+  string output = 3;
+
+  string workload = 4;
+  repeated string aux = 5;
 }
 
 message ReceivedWorkResponse {

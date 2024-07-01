@@ -13,6 +13,8 @@ mod args;
 
 mod map;
 
+mod reduce;
+
 async fn start_server(port: u16, address: String, client_config: ClientConfig) {
     tokio::task::spawn(async move {
         let addr = format!("[::1]:{}", port).parse().unwrap();

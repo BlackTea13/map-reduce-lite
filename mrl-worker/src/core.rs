@@ -19,6 +19,7 @@ pub use worker::{
 use crate::core::coordinator::WorkerDoneRequest;
 use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceMessage};
 use crate::map;
+use crate::reduce;
 
 pub mod coordinator {
     tonic::include_proto!("coordinator");
@@ -83,7 +84,7 @@ impl Worker for MRWorker {
                 MapMessage(msg) => {
                     map::perform_map(msg, &id, work_request.num_workers, &client, &address).await
                 }
-                ReduceMessage(msg) => todo!(),
+                ReduceMessage(msg) => reduce::perform_reduce(msg, &id, &client, &address).await,
             };
 
             let coordinator_connect = CoordinatorClient::connect(address.clone()).await;

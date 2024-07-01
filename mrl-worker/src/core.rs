@@ -13,7 +13,8 @@ pub use coordinator::{
 };
 pub use worker::worker_server::{Worker, WorkerServer};
 pub use worker::{
-    AckRequest, AckResponse, MapJobRequest, ReceivedWorkRequest, ReceivedWorkResponse,
+    AckRequest, AckResponse, KillWorkerRequest, KillWorkerResponse, MapJobRequest,
+    ReceivedWorkRequest, ReceivedWorkResponse,
 };
 
 use crate::core::coordinator::WorkerDoneRequest;
@@ -114,5 +115,12 @@ impl Worker for MRWorker {
         }
         let reply = AckResponse {};
         Ok(Response::new(reply))
+    }
+
+    async fn kill_worker(
+        &self,
+        request: Request<KillWorkerRequest>,
+    ) -> Result<Response<KillWorkerResponse>, Status> {
+        panic!();
     }
 }

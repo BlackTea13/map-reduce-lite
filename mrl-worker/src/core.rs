@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
 use tonic::{Request, Response, Status};
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use common::minio::{Client, ClientConfig};
 //
@@ -42,15 +42,21 @@ pub struct MRWorker {
     client: Client,
     id: Arc<Mutex<Option<u32>>>,
     address: String,
+    sender: mpsc::Sender<()>,
 }
 
 impl MRWorker {
-    pub fn new(address: String, client_config: ClientConfig) -> MRWorker {
+    pub fn new(
+        address: String,
+        client_config: ClientConfig,
+        sender: mpsc::Sender<()>,
+    ) -> MRWorker {
         MRWorker {
             state: WorkerState::Idle,
             id: Arc::new(Mutex::new(None)),
             address,
             client: Client::from_conf(client_config),
+            sender,
         }
     }
 }
@@ -121,6 +127,11 @@ impl Worker for MRWorker {
         &self,
         request: Request<KillWorkerRequest>,
     ) -> Result<Response<KillWorkerResponse>, Status> {
-        panic!();
+        info!("Kill signal received");
+        if self.sender.clone().send(()).await.is_err() {
+            return Err(Status::internal("Failed to send shutdown signal"));
+        }
+        let reply = KillWorkerResponse { success: true };
+        Ok(Response::new(reply))
     }
 }

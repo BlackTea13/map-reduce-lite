@@ -49,9 +49,10 @@ pub async fn perform_map(
     client: &Client,
     coordinator_address: &String,
 ) -> Result<(), Error> {
-    if *worker_id & 1 == 1 {
-        tokio::time::sleep(tokio::time::Duration::from_secs(10000)).await;
-    }
+    /// TODO: Remove me when straggler is done
+    // if *worker_id & 1 == 1 {
+    //     tokio::time::sleep(tokio::time::Duration::from_secs(10000)).await;
+    // }
     let bucket_in = request.bucket_in;
     let bucket_out = request.bucket_out;
     let output_key = request.output_path;

@@ -11,8 +11,10 @@ use common::minio::{Client, ClientConfig};
 pub use coordinator::{
     coordinator_client::CoordinatorClient, WorkerJoinRequest, WorkerLeaveRequest,
 };
-pub use worker::{AckRequest, AckResponse, MapJobRequest, ReceivedWorkRequest, ReceivedWorkResponse};
 pub use worker::worker_server::{Worker, WorkerServer};
+pub use worker::{
+    AckRequest, AckResponse, MapJobRequest, ReceivedWorkRequest, ReceivedWorkResponse,
+};
 
 use crate::core::coordinator::WorkerDoneRequest;
 use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceMessage};
@@ -26,10 +28,10 @@ pub mod worker {
     tonic::include_proto!("worker");
 }
 
-
 #[derive(Debug, Default)]
 enum WorkerState {
-    #[default] Idle,
+    #[default]
+    Idle,
     InProgress,
 }
 
@@ -43,7 +45,12 @@ pub struct MRWorker {
 
 impl MRWorker {
     pub fn new(address: String, client_config: ClientConfig) -> MRWorker {
-        MRWorker { state: WorkerState::Idle, id: Arc::new(Mutex::new(None)), address, client: Client::from_conf(client_config) }
+        MRWorker {
+            state: WorkerState::Idle,
+            id: Arc::new(Mutex::new(None)),
+            address,
+            client: Client::from_conf(client_config),
+        }
     }
 }
 
@@ -61,7 +68,9 @@ impl Worker for MRWorker {
             // Accept the work only if we are free
             match self.state {
                 WorkerState::Idle => {}
-                WorkerState::InProgress => return Ok(Response::new(ReceivedWorkResponse { success: false })),
+                WorkerState::InProgress => {
+                    return Ok(Response::new(ReceivedWorkResponse { success: false }))
+                }
             }
         }
 
@@ -71,14 +80,18 @@ impl Worker for MRWorker {
             let id = id.clone().lock().await.unwrap();
 
             let _ = match work_request.job_message.unwrap() {
-                MapMessage(msg) => map::perform_map(msg, &id, work_request.num_workers, &client, &address).await,
+                MapMessage(msg) => {
+                    map::perform_map(msg, &id, work_request.num_workers, &client, &address).await
+                }
                 ReduceMessage(msg) => todo!(),
             };
 
             let coordinator_connect = CoordinatorClient::connect(address.clone()).await;
 
             if let Ok(mut client) = coordinator_connect {
-                let request = Request::new(WorkerDoneRequest { worker_id: id as i32 });
+                let request = Request::new(WorkerDoneRequest {
+                    worker_id: id as i32,
+                });
 
                 if let Err(_) = client.worker_done(request).await {
                     error!("Worker (ID={}) failed to finish job", id);
@@ -103,4 +116,3 @@ impl Worker for MRWorker {
         Ok(Response::new(reply))
     }
 }
-

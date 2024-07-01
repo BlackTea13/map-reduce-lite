@@ -42,7 +42,8 @@ message AddJobRequest {
   string input_files = 1;
   string output_files = 2;
   string workload = 3;
-  repeated string aux = 4;
+  uint32 timeout = 4;
+  repeated string aux = 5;
 }
 
 message AddJobResponse {

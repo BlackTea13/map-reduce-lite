@@ -1,9 +1,7 @@
+use std::collections::HashMap;
 use std::collections::VecDeque;
 
-use crate::{
-    core::coordinator::AddJobRequest,
-    worker_info::WorkerID,
-};
+use crate::{core::coordinator::AddJobRequest, worker_info::WorkerID};
 
 /// State of the job.
 #[derive(Debug, Clone, Copy)]
@@ -45,6 +43,11 @@ pub struct Job {
     /// List of workers who are working on the job.
     workers: Vec<WorkerID>,
 
+    /// Timeout allowed before marked as straggler for worker
+    timeout: u32,
+
+    /// Hashmap to store the files each worker is working on
+    worker_files: HashMap<WorkerID, Vec<String>>,
 }
 
 impl Job {
@@ -59,6 +62,8 @@ impl Job {
             workload: request.workload,
             args: request.aux,
             workers: vec![],
+            timeout: request.timeout,
+            worker_files: HashMap::new(),
         }
     }
 
@@ -87,6 +92,11 @@ impl Job {
         self.state
     }
 
+    /// Get task timeout
+    pub fn get_timeout(&self) -> u32 {
+        self.timeout
+    }
+
     /// Get workers working on the job.
     pub fn get_workers(&self) -> &Vec<WorkerID> {
         &self.workers
@@ -102,6 +112,18 @@ impl Job {
         worker_ids
             .into_iter()
             .for_each(|worker_id| self.add_worker(worker_id));
+    }
+
+    pub fn set_worker_files(
+        &mut self,
+        worker_id: WorkerID,
+        files: Vec<String>,
+    ) -> Option<Vec<String>> {
+        self.worker_files.insert(worker_id, files)
+    }
+
+    pub fn get_worker_files(&self, worker_id: &WorkerID) -> Option<&Vec<String>> {
+        self.worker_files.get(worker_id)
     }
 }
 

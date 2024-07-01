@@ -1,21 +1,22 @@
+use std::time::Duration;
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
 
 use tokio::sync::{Mutex, Notify};
 use tonic::{Request, Response, Status};
 use tracing::info;
 
-use coordinator::*;
 pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
-pub use worker::{AckRequest, ReceivedWorkRequest, worker_client::WorkerClient};
+use coordinator::*;
+pub use worker::{worker_client::WorkerClient, AckRequest, ReceivedWorkRequest};
 
+use crate::jobs::{Job, JobQueue};
+use crate::minio::{Client, ClientConfig};
+use crate::worker_info::WorkerID;
 use crate::{
     jobs,
     worker_info::{Worker, WorkerState},
     worker_registry::WorkerRegistry,
 };
-use crate::jobs::{Job, JobQueue};
-use crate::minio::{Client, ClientConfig};
-use crate::worker_info::{WorkerID};
 
 pub mod coordinator {
     tonic::include_proto!("coordinator");
@@ -30,6 +31,7 @@ struct Submit {
     workload: String,
     output: String,
     args: Vec<String>,
+    timeout: u32,
 }
 
 pub enum WorkType {
@@ -95,7 +97,6 @@ impl MRCoordinator {
             let worker_status = format!("Worker (ID={:0>4}) - {:?}", index, worker.state);
             data.push(worker_status);
         }
-
         data
     }
 
@@ -159,7 +160,9 @@ impl Coordinator for MRCoordinator {
         let mut client = WorkerClient::connect(format!("http://{}", addr).to_string())
             .await
             .map_err(|_| Status::unknown("Unable to connect to client"))?;
-        let request = Request::new(AckRequest { worker_id: worker_id as u32 });
+        let request = Request::new(AckRequest {
+            worker_id: worker_id as u32,
+        });
 
         let resp = client.ack(request).await;
         if resp.is_err() {
@@ -238,10 +241,7 @@ impl Coordinator for MRCoordinator {
 
         let mut registry = self.get_registry().await;
         if let Some(worker) = registry.get_worker_mut(worker_id) {
-            match worker.state {
-                WorkerState::Mapping => worker.set_state(WorkerState::Reducing),
-                _ => worker.set_state(WorkerState::Free)
-            }
+            worker.set_state(WorkerState::Free)
         }
 
         let reply = WorkerDoneResponse { success: true };

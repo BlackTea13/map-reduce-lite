@@ -7,32 +7,52 @@ use dashmap::DashMap;
 use glob::glob;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
-use tracing::{info};
+use tracing::info;
 use walkdir::WalkDir;
 
-use common::{ihash, KeyValue};
+use crate::CoordinatorClient;
 use common::minio::Client;
+use common::{ihash, KeyValue};
 
-use crate::core::{MapJobRequest};
+use crate::core::MapJobRequest;
 
 const WORKING_DIR: &str = "/var/tmp/";
 
 type BucketIndex = u32;
 type Buckets = DashMap<BucketIndex, Vec<KeyValue>>;
 
-pub async fn upload_objects(bucket: &str, path: &str, buckets: Buckets, worker_id: &u32, client: &Client, coordinator_address: &String) -> Result<(), Error> {
+pub async fn upload_objects(
+    bucket: &str,
+    path: &str,
+    buckets: Buckets,
+    worker_id: &u32,
+    client: &Client,
+    coordinator_address: &String,
+) -> Result<(), Error> {
     for (index, records) in buckets {
         let records: Vec<String> = records.iter().map(|r| r.to_string()).collect();
         let contents = records.join("\n");
         let out_key = format!("{path}/temp/mr-in-{index}-{worker_id}");
 
-        client.put_object(bucket, &out_key, Bytes::from(contents)).await?;
+        client
+            .put_object(bucket, &out_key, Bytes::from(contents))
+            .await?;
     }
 
     Ok(())
 }
 
-pub async fn perform_map(request: MapJobRequest, worker_id: &u32, num_workers: u32, client: &Client, coordinator_address: &String) -> Result<(), Error> {
+pub async fn perform_map(
+    request: MapJobRequest,
+    worker_id: &u32,
+    num_workers: u32,
+    client: &Client,
+    coordinator_address: &String,
+) -> Result<(), Error> {
+    /// TODO: Remove me when straggler is done
+    // if *worker_id & 1 == 1 {
+    //     tokio::time::sleep(tokio::time::Duration::from_secs(10000)).await;
+    // }
     let bucket_in = request.bucket_in;
     let bucket_out = request.bucket_out;
     let output_key = request.output_path;
@@ -44,7 +64,12 @@ pub async fn perform_map(request: MapJobRequest, worker_id: &u32, num_workers: u
 
     let workload = match workload::try_named(&workload) {
         Some(wl) => wl,
-        None => return Err(anyhow!("The workload `{}` is not a known workload", workload)),
+        None => {
+            return Err(anyhow!(
+                "The workload `{}` is not a known workload",
+                workload
+            ))
+        }
     };
 
     let target_dir = format!("{WORKING_DIR}mrl-{worker_id}");
@@ -54,7 +79,9 @@ pub async fn perform_map(request: MapJobRequest, worker_id: &u32, num_workers: u
     }
 
     for key in input_keys {
-        client.download_object(&bucket_in, &key, &target_dir).await?;
+        client
+            .download_object(&bucket_in, &key, &target_dir)
+            .await?;
     }
 
     let map_fn = workload.map_fn;
@@ -99,9 +126,15 @@ pub async fn perform_map(request: MapJobRequest, worker_id: &u32, num_workers: u
         }
     });
 
-    upload_objects(&bucket_out, &output_key, buckets, worker_id, client, coordinator_address).await?;
+    upload_objects(
+        &bucket_out,
+        &output_key,
+        buckets,
+        worker_id,
+        client,
+        coordinator_address,
+    )
+    .await?;
 
     Ok(())
 }
-
-

@@ -7,11 +7,11 @@ use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart};
 use aws_smithy_types::byte_stream::Length;
 use aws_smithy_types::error::metadata::ProvideErrorMetadata;
-use bytes::{Bytes};
+use bytes::Bytes;
 use globset::Glob;
 use tokio::fs::File;
-use tokio::io::AsyncReadExt;
 use tokio::io::copy;
+use tokio::io::AsyncReadExt;
 use tracing::{debug, error, info};
 use url::Url;
 
@@ -40,7 +40,9 @@ pub fn path_to_bucket_key(path: &str) -> Result<BucketKey, Error> {
         }
     }
 
-    let bucket = s3_url.domain().ok_or(anyhow!("something went wrong trying to retrieve bucket"))?;
+    let bucket = s3_url
+        .domain()
+        .ok_or(anyhow!("something went wrong trying to retrieve bucket"))?;
 
     let mut key = "";
     if !s3_url.path().is_empty() {
@@ -126,6 +128,64 @@ impl Client {
         Ok(())
     }
 
+    pub async fn move_objects(
+        &self,
+        bucket: &str,
+        source_path: &str,
+        destination_path: &str,
+    ) -> Result<(), Error> {
+        let source_objects = self.list_objects_in_dir(bucket, source_path).await?;
+
+        for source_object in source_objects {
+            let destination_key = format!(
+                "{}/{}",
+                destination_path,
+                source_object
+                    .trim_start_matches(source_path)
+                    .trim_start_matches('/')
+            );
+
+            self.copy_object(bucket, &source_object, &destination_key)
+                .await?;
+
+            self.delete_object(bucket, &source_object).await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn copy_object(
+        &self,
+        bucket: &str,
+        source_key: &str,
+        destination_key: &str,
+    ) -> Result<(), Error> {
+        let copy_source = format!("{}/{}", bucket, source_key);
+
+        self.client
+            .copy_object()
+            .bucket(bucket)
+            .copy_source(copy_source)
+            .key(destination_key)
+            .send()
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn rename_object(
+        &self,
+        bucket: &str,
+        old_key: &str,
+        new_key: &str,
+    ) -> Result<(), Error> {
+        self.delete_object(bucket, old_key).await?;
+
+        self.copy_object(bucket, old_key, new_key).await?;
+
+        Ok(())
+    }
+
     pub async fn list_objects(&self, bucket: &str) -> Result<Vec<String>, Error> {
         self.list_objects_in_dir(bucket, "").await
     }
@@ -164,7 +224,8 @@ impl Client {
         bucket: &str,
         key: &str, // Path to the object
     ) -> Result<bool, Error> {
-        let object_request = self.client
+        let object_request = self
+            .client
             .head_object()
             .bucket(bucket)
             .key(key)
@@ -182,8 +243,14 @@ impl Client {
         }
     }
 
-    pub async fn append_to_s3_object(&self, bucket_name: &str, object_key: &str, data_to_append: Bytes) -> Result<(), Error> {
-        let get_object_response = self.client
+    pub async fn append_to_s3_object(
+        &self,
+        bucket_name: &str,
+        object_key: &str,
+        data_to_append: Bytes,
+    ) -> Result<(), Error> {
+        let get_object_response = self
+            .client
             .get_object()
             .bucket(bucket_name)
             .key(object_key)
@@ -195,7 +262,8 @@ impl Client {
         let _ = get_object_response
             .body
             .into_async_read()
-            .read_to_end(&mut existing_data).await?;
+            .read_to_end(&mut existing_data)
+            .await?;
 
         existing_data.extend_from_slice(&data_to_append);
 

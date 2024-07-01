@@ -1,5 +1,7 @@
-use coordinator::{AddJobRequest, coordinator_client::CoordinatorClient, JobsRequest};
-
+use crate::core::coordinator::coordinator_client::CoordinatorClient;
+use crate::core::coordinator::AddJobRequest;
+use crate::core::coordinator::JobsRequest;
+use clap::builder::TypedValueParser;
 //
 // Import gRPC stubs/definitions.
 //
@@ -10,6 +12,7 @@ pub mod coordinator {
 }
 
 const PORT: u16 = 8030;
+const TIMEOUT: u32 = 5;
 
 // Tasks
 pub async fn jobs() -> Result<(), Box<dyn std::error::Error>> {
@@ -38,12 +41,14 @@ pub async fn submit(
     output: String,
     workload: String,
     aux: Vec<String>,
+    timeout: Option<u32>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut client = CoordinatorClient::connect(format!("http://[::1]:{}", PORT)).await?;
     let request = tonic::Request::new(AddJobRequest {
         input_files: input,
         output_files: output,
         workload,
+        timeout: timeout.unwrap_or(TIMEOUT),
         aux,
     });
     let response = client.add_job(request).await?;
@@ -51,7 +56,6 @@ pub async fn submit(
 
     Ok(())
 }
-
 
 pub async fn status() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = CoordinatorClient::connect(format!("http://[::1]:{}", PORT)).await?;

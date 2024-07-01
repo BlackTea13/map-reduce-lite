@@ -94,9 +94,9 @@ impl Worker for MRWorker {
                 });
 
                 if let Err(_) = client.worker_done(request).await {
-                    error!("Worker (ID={}) failed to finish job", id);
+                    error!("Worker (ID={}) failed to finish job", id & 0xFFFF);
                 } else {
-                    info!("Worker (ID={}) done with job", id);
+                    info!("Worker (ID={}) done with job", id & 0xFFFF);
                 }
             }
         });

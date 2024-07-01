@@ -32,6 +32,7 @@ pub async fn upload_objects(
     for (index, records) in buckets {
         let records: Vec<String> = records.iter().map(|r| r.to_string()).collect();
         let contents = records.join("\n");
+        let worker_id = worker_id & 0xFFFF;
         let out_key = format!("{path}/temp/mr-in-{index}-{worker_id}");
 
         client

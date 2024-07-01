@@ -120,9 +120,10 @@ pub async fn perform_map(
     // cleanup temp files on local
     tokio::task::spawn(async move {
         for entry in WalkDir::new(WORKING_DIR) {
-            let entry = entry.unwrap();
-            if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("mrl") {
-                let _ = fs::remove_dir_all(entry.path());
+            if let Ok(entry) = entry {
+                if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("mrl") {
+                    let _ = fs::remove_dir_all(entry.path());
+                }
             }
         }
     });

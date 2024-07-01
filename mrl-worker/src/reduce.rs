@@ -155,7 +155,7 @@ pub async fn perform_reduce(
                     && entry
                         .file_name()
                         .to_string_lossy()
-                        .starts_with(format!("mrl-{}", reduce_id))
+                        .starts_with(&format!("mrl-{}", reduce_id))
                 {
                     let _ = fs::remove_dir_all(entry.path());
                 }

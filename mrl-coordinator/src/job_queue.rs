@@ -6,10 +6,9 @@ use std::sync::Arc;
 
 use tokio::select;
 use tokio::sync::Mutex;
-use tokio::time::Duration;
+
 use tonic::Request;
-use tracing::{debug, info};
-use url::Url;
+use tracing::info;
 
 use common::minio::{path_to_bucket_key, Client};
 
@@ -62,10 +61,10 @@ async fn _process_job_queue(
     monitor_workers(&client, registry.clone(), job, WorkerState::Mapping).await?;
 
     // 2. Reduce stage.
-    //process_reduce_job(&client, registry.clone(), job).await?;
+    process_reduce_job(&client, registry.clone(), job).await?;
 
     // Wait for workers to be complete.
-    //monitor_workers(&client, registry.clone(), job, WorkerState::Reducing).await?;
+    monitor_workers(&client, registry.clone(), job, WorkerState::Reducing).await?;
 
     Ok(())
 }
@@ -333,7 +332,7 @@ async fn create_straggler_request(
             bucket_in: bucket_in,
             input_keys: straggler_input.to_vec(),
             bucket_out: bucket_out,
-            output_key: format!("{}/temp/straggler_copy", key_out),
+            output_path: format!("{}/temp/straggler_copy", key_out),
             workload: workload,
             aux: aux,
         };
@@ -348,7 +347,7 @@ async fn create_straggler_request(
             bucket_in: bucket_in,
             input_keys: straggler_input.to_vec(),
             bucket_out: bucket_out,
-            output_key: format!("{}/temp/straggler_copy", key_out),
+            output_path: format!("{}/straggler_copy", key_out),
             workload: workload,
             aux: aux,
         };
@@ -382,10 +381,21 @@ async fn straggler_vs_free_worker(
             while client.list_objects_in_dir(&bucket_out, &key_prefix).await?.is_empty() {
                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             }
+
             client.move_objects(&bucket_out,"temp/straggler_copy/temp","temp").await?;
+
         },
         _ = wait_for_worker_to_become_free(registry.clone(), straggler_id) => {
             info!("Straggler worker {} is done", straggler_id);
+
+            let key_prefix = "temp/straggler_copy/temp";
+
+            while client.list_objects_in_dir(&bucket_out, &key_prefix).await?.is_empty() {
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            }
+
+            client.delete_object(&bucket_out, &key_prefix);
+
             //client.move_objects(&bucket_out,&format!("{}/straggler_copy" , key_out).await?;
         },
         _ = tokio::time::sleep(tokio::time::Duration::from_secs(30)) => {

@@ -136,8 +136,6 @@ impl Client {
     ) -> Result<(), Error> {
         let source_objects = self.list_objects_in_dir(bucket, source_path).await?;
 
-        info!("{:?}", &source_objects);
-
         for source_object in source_objects {
             let destination_key = format!(
                 "{}/{}",
@@ -147,15 +145,10 @@ impl Client {
                     .trim_start_matches('/')
             );
 
-            info!("{}", &destination_key);
-
             self.copy_object(bucket, &source_object, &destination_key)
                 .await?;
 
-            match self.delete_object(bucket, &source_object).await {
-                Ok(_) => todo!(),
-                Err(e) => dbg!(e.to_string()),
-            };
+            self.delete_object(bucket, &source_object).await?;
         }
 
         Ok(())
@@ -286,7 +279,6 @@ impl Client {
     }
 
     pub async fn delete_object(&self, bucket: &str, key: &str) -> Result<(), Error> {
-        info!("{}/{}", bucket, key);
         self.client
             .delete_object()
             .bucket(bucket)

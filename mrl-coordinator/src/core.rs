@@ -241,7 +241,6 @@ impl Coordinator for MRCoordinator {
 
         let mut registry = self.get_registry().await;
         if let Some(worker) = registry.get_worker_mut(worker_id) {
-            dbg!(&worker_id);
             worker.set_state(WorkerState::Free)
         }
 

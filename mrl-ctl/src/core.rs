@@ -1,7 +1,8 @@
+use clap::builder::TypedValueParser;
+
 use crate::core::coordinator::coordinator_client::CoordinatorClient;
 use crate::core::coordinator::AddJobRequest;
 use crate::core::coordinator::JobsRequest;
-use clap::builder::TypedValueParser;
 //
 // Import gRPC stubs/definitions.
 //

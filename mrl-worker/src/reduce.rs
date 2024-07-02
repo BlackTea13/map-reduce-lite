@@ -1,24 +1,28 @@
-use crate::core::worker::ReduceJobRequest;
-use crate::info;
-use crate::CoordinatorClient;
-use anyhow::{anyhow, Error};
-use bytes::Bytes;
-use bytesize::MB;
-use common::minio::Client;
-use common::{ihash, KeyValue};
-use dashmap::DashMap;
-use ext_sort::{buffer::LimitedBufferBuilder, ExternalSorter, ExternalSorterBuilder};
-use glob::glob;
 use std::borrow::Cow;
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::{self, prelude::*};
 use std::path::Path;
+
+use anyhow::{anyhow, Error};
+use bytes::Bytes;
+use bytesize::MB;
+use dashmap::DashMap;
+use ext_sort::{buffer::LimitedBufferBuilder, ExternalSorter, ExternalSorterBuilder};
+use glob::glob;
+use tracing::error;
+use walkdir::WalkDir;
+
+use common::minio::Client;
+use common::{ihash, KeyValue};
+
+use crate::core::worker::ReduceJobRequest;
+use crate::info;
+use crate::CoordinatorClient;
+
 // use tokio::fs::File;
 // use tokio::io::AsyncReadExt;
-
-use walkdir::WalkDir;
 
 const WORKING_DIR: &str = "/var/tmp/";
 
@@ -50,12 +54,11 @@ pub async fn perform_reduce(
     request: ReduceJobRequest,
     worker_id: &u32,
     client: &Client,
-    coordinator_address: &String,
 ) -> Result<(), Error> {
     let aux = request.aux;
     let bucket = request.bucket;
     let inputs = request.inputs;
-    let output = request.output;
+    let output_path = request.output;
     let reduce_id = request.reduce_id;
     let workload = request.workload;
 
@@ -109,8 +112,6 @@ pub async fn perform_reduce(
     let mut values: Vec<Bytes> = vec![];
     for line in reader.lines() {
         if let Ok(line) = line {
-            // TODO: Check this to debug weird map writing bug.
-            // dbg!(&line);
             let (key, value) = line.split_once(' ').unwrap();
             let (key, value) = (key.to_string(), value.to_string());
 
@@ -119,13 +120,6 @@ pub async fn perform_reduce(
                 values.push(Bytes::from(value));
             } else if previous_key != key {
                 let aux_bytes = Bytes::from(aux.clone().join(" "));
-
-                // For debugging.
-                // info!(
-                //     "Previous: {}, Count: {}",
-                //     previous_key.clone(),
-                //     values.len()
-                // );
 
                 let out = reduce_func(
                     Bytes::from(previous_key.clone()),
@@ -145,7 +139,19 @@ pub async fn perform_reduce(
         }
     }
 
-    // TODO: Copy file from local into s3.
+    // write the last group to the output
+    let aux_bytes = Bytes::from(aux.clone().join(" "));
+    let out = reduce_func(
+        Bytes::from(previous_key.clone()),
+        Box::new(values.clone().into_iter()),
+        aux_bytes,
+    )?;
+    out_file.write_all(&out)?;
+
+    let output_key = format!("{output_path}/mr-out-{}", worker_id & 0xFFFF);
+    client
+        .upload_file(&bucket, &output_key, out_pathspec)
+        .await?;
 
     // cleanup temp files on local
     tokio::task::spawn(async move {
@@ -162,6 +168,14 @@ pub async fn perform_reduce(
             }
         }
     });
+
+    // cleanup temp files in S3
+    let temp_path = match output_path.as_str() {
+        "" => "temp",
+        _ => &format!("{}/temp", output_path),
+    };
+
+    client.delete_path(&bucket, temp_path).await?;
 
     Ok(())
 }

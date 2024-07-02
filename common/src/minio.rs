@@ -123,7 +123,6 @@ impl Client {
             .bucket(bucket)
             .key(key)
             .body(ByteStream::from(data))
-            .content_type("text/html;charset=utf-8")
             .send()
             .await?;
         Ok(())
@@ -181,9 +180,7 @@ impl Client {
         new_key: &str,
     ) -> Result<(), Error> {
         self.delete_object(bucket, old_key).await?;
-
         self.copy_object(bucket, old_key, new_key).await?;
-
         Ok(())
     }
 
@@ -192,7 +189,7 @@ impl Client {
     }
 
     /// Lists all objects found in the specified folder in S3.
-    /// the folder path argument expects a URL string, it will remove wildcard operators '*'
+    /// the folder path argument expects a URL string
     pub async fn list_objects_in_dir(&self, bucket: &str, key: &str) -> Result<Vec<String>, Error> {
         let mut response = self
             .client
@@ -244,41 +241,6 @@ impl Client {
         }
     }
 
-    pub async fn append_to_s3_object(
-        &self,
-        bucket_name: &str,
-        object_key: &str,
-        data_to_append: Bytes,
-    ) -> Result<(), Error> {
-        let get_object_response = self
-            .client
-            .get_object()
-            .bucket(bucket_name)
-            .key(object_key)
-            .send()
-            .await?;
-
-        let mut existing_data = Vec::new();
-
-        let _ = get_object_response
-            .body
-            .into_async_read()
-            .read_to_end(&mut existing_data)
-            .await?;
-
-        existing_data.extend_from_slice(&data_to_append);
-
-        self.client
-            .put_object()
-            .bucket(bucket_name)
-            .key(object_key)
-            .body(ByteStream::from(existing_data))
-            .send()
-            .await?;
-
-        Ok(())
-    }
-
     pub async fn delete_object(&self, bucket: &str, key: &str) -> Result<(), Error> {
         self.client
             .delete_object()
@@ -286,6 +248,15 @@ impl Client {
             .key(key)
             .send()
             .await?;
+        Ok(())
+    }
+
+    pub async fn delete_path(&self, bucket: &str, path: &str) -> Result<(), Error> {
+        let objects = self.list_objects_in_dir(bucket, path).await?;
+        for object in objects {
+            self.delete_object(bucket, &object).await?;
+        }
+
         Ok(())
     }
 
@@ -316,7 +287,6 @@ impl Client {
     }
 
     pub async fn download_object(&self, bucket: &str, key: &str, dir: &str) -> Result<(), Error> {
-        debug!("Downloading object `{key}` from bucket `{bucket}` to directory `{dir}`");
         let file_name = format!(
             "{dir}/mr-in-{}",
             key.split('/').collect::<Vec<_>>().last().unwrap()
@@ -340,7 +310,6 @@ impl Client {
     }
 
     pub async fn upload_file(&self, bucket: &str, key: &str, path: String) -> Result<(), Error> {
-        info!("Preparing to upload file `{path}` to bucket `{bucket}` with key `{key}`");
         let multipart_upload = self
             .client
             .create_multipart_upload()

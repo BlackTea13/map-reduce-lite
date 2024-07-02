@@ -11,11 +11,11 @@ use tokio::io::AsyncReadExt;
 use tracing::info;
 use walkdir::WalkDir;
 
-use crate::CoordinatorClient;
 use common::minio::Client;
 use common::{ihash, KeyValue};
 
 use crate::core::MapJobRequest;
+use crate::CoordinatorClient;
 
 const WORKING_DIR: &str = "/var/tmp/";
 
@@ -76,7 +76,7 @@ pub async fn perform_map(
         }
     };
 
-    let target_dir = format!("{WORKING_DIR}mrl-{worker_id}");
+    let target_dir = format!("{WORKING_DIR}mrl-{}", worker_id & 0xFFFF);
     let target_path = Path::new(&target_dir);
     if !target_path.exists() {
         fs::create_dir_all(target_path)?;

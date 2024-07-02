@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use tokio::select;
 use tokio::sync::Mutex;
-
 use tonic::Request;
 use tracing::info;
 
@@ -61,7 +60,7 @@ async fn _process_job_queue(
     monitor_workers(&client, registry.clone(), job, WorkerState::Mapping).await?;
 
     // 2. Reduce stage.
-    // process_reduce_job(&client, registry.clone(), job).await?;
+    process_reduce_job(&client, registry.clone(), job).await?;
 
     // Wait for workers to be complete.
     // monitor_workers(&client, registry.clone(), job, WorkerState::Reducing).await?;
@@ -175,12 +174,11 @@ async fn process_reduce_job(
         let mut worker_client = worker.client.clone();
 
         let inputs = get_reduce_input_files(client, &bucket, &output_key, index).await?;
-        let output = format!("{}/mr-out-{}", &output_key, index);
 
         let reduce_message = ReduceJobRequest {
             bucket: bucket.clone(),
             inputs,
-            output,
+            output: output_key.clone(),
             aux: job.get_args().clone(),
             workload: job.get_workload().clone(),
             reduce_id: index as u32,

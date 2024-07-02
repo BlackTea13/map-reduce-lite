@@ -84,7 +84,7 @@ impl Worker for MRWorker {
                 MapMessage(msg) => {
                     map::perform_map(msg, &id, work_request.num_workers, &client).await
                 }
-                ReduceMessage(msg) => reduce::perform_reduce(msg, &id, &client, &address).await,
+                ReduceMessage(msg) => reduce::perform_reduce(msg, &id, &client).await,
             };
 
             let coordinator_connect = CoordinatorClient::connect(address.clone()).await;

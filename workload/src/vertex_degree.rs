@@ -5,8 +5,8 @@
 use anyhow::{anyhow, Result};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
-use common::{KeyValue, MapOutput};
 use common::utils::string_from_bytes;
+use common::{KeyValue, MapOutput};
 
 fn parse_line(line: &str) -> Result<(u64, u64)> {
     let mut iter = line.split_whitespace().take(2);
@@ -55,7 +55,7 @@ pub fn map(kv: KeyValue, _aux: Bytes) -> MapOutput {
 
 pub fn reduce(
     key: Bytes,
-    values: Box<dyn Iterator<Item=Bytes> + '_>,
+    values: Box<dyn Iterator<Item = Bytes> + '_>,
     _aux: Bytes,
 ) -> Result<Bytes> {
     let mut count = 0u64;

@@ -1,8 +1,9 @@
 use std::fs;
+use std::ops::Deref;
 use std::path::Path;
 
 use anyhow::{anyhow, Error};
-use bytes::Bytes;
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use dashmap::DashMap;
 use glob::glob;
 use tokio::fs::File;
@@ -27,16 +28,20 @@ pub async fn upload_objects(
     buckets: Buckets,
     worker_id: &u32,
     client: &Client,
-    coordinator_address: &String,
 ) -> Result<(), Error> {
     for (index, records) in buckets {
-        let records: Vec<String> = records.iter().map(|r| r.to_string()).collect();
-        let contents = records.join("\n");
+        let mut buffer = BytesMut::new();
+        for record in records {
+            buffer.put_slice(record.key.iter().as_slice());
+            buffer.put_slice(b" ");
+            buffer.put_slice(record.value.iter().as_slice());
+            buffer.put_slice(b"\n");
+        }
+
+        let worker_id = worker_id & 0xFFFF;
         let out_key = format!("{path}/temp/mr-in-{index}-{worker_id}");
 
-        client
-            .put_object(bucket, &out_key, Bytes::from(contents))
-            .await?;
+        client.put_object(bucket, &out_key, buffer.freeze()).await?;
     }
 
     Ok(())
@@ -47,7 +52,6 @@ pub async fn perform_map(
     worker_id: &u32,
     num_workers: u32,
     client: &Client,
-    coordinator_address: &String,
 ) -> Result<(), Error> {
     /// TODO: Remove me when straggler is done
     // if *worker_id & 1 == 1 {
@@ -119,22 +123,15 @@ pub async fn perform_map(
     // cleanup temp files on local
     tokio::task::spawn(async move {
         for entry in WalkDir::new(WORKING_DIR) {
-            let entry = entry.unwrap();
-            if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("mrl") {
-                let _ = fs::remove_dir_all(entry.path());
+            if let Ok(entry) = entry {
+                if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("mrl") {
+                    let _ = fs::remove_dir_all(entry.path());
+                }
             }
         }
     });
 
-    upload_objects(
-        &bucket_out,
-        &output_key,
-        buckets,
-        worker_id,
-        client,
-        coordinator_address,
-    )
-    .await?;
+    upload_objects(&bucket_out, &output_key, buckets, worker_id, client).await?;
 
     Ok(())
 }

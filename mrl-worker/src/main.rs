@@ -14,6 +14,8 @@ mod args;
 
 mod map;
 
+mod reduce;
+
 async fn start_server(
     port: u16,
     address: String,

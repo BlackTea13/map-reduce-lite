@@ -151,7 +151,7 @@ async fn get_reduce_input_files(
 ) -> Result<Vec<String>, anyhow::Error> {
     let dir = format!("{}/temp/mr-in-{}", &key, index);
 
-    client.list_objects_in_dir(&bucket, &dir).await
+    client.list_objects_in_dir(&bucket, &dir[1..]).await
 }
 
 /// Process reduce job.
@@ -184,6 +184,7 @@ async fn process_reduce_job(
             output,
             aux: job.get_args().clone(),
             workload: job.get_workload().clone(),
+            reduce_id: index as u32,
         };
 
         let request = ReceivedWorkRequest {

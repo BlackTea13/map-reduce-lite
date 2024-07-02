@@ -31,7 +31,7 @@ pub fn map(kv: KeyValue, _aux: Bytes) -> MapOutput {
 
 pub fn reduce(
     key: Bytes,
-    values: Box<dyn Iterator<Item=Bytes> + '_>,
+    values: Box<dyn Iterator<Item = Bytes> + '_>,
     _aux: Bytes,
 ) -> Result<Bytes> {
     let count: u64 = values.map(|mut value| value.get_u64()).sum();

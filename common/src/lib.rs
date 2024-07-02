@@ -11,8 +11,8 @@ use bytes::Bytes;
 use clap::{Parser, Subcommand};
 
 pub mod codec;
-pub mod utils;
 pub mod minio;
+pub mod utils;
 
 /////////////////////////////////////////////////////////////////////////////
 // MapReduce application types
@@ -26,7 +26,7 @@ pub mod minio;
 ///
 /// This accomodates both batch (all keys emitted at once) and lazy
 /// (keys only emitted when the iterator is consumed) map operations.
-pub type MapOutput = anyhow::Result<Box<dyn Iterator<Item=anyhow::Result<KeyValue>>>>;
+pub type MapOutput = anyhow::Result<Box<dyn Iterator<Item = anyhow::Result<KeyValue>>>>;
 
 /// A map function takes a key-value pair and auxiliary arguments.
 ///
@@ -38,7 +38,7 @@ pub type MapFn = fn(kv: KeyValue, aux: Bytes) -> MapOutput;
 /// containing a single output value.
 pub type ReduceFn = fn(
     key: Bytes,
-    values: Box<dyn Iterator<Item=Bytes> + '_>,
+    values: Box<dyn Iterator<Item = Bytes> + '_>,
     aux: Bytes,
 ) -> anyhow::Result<Bytes>;
 
@@ -65,8 +65,8 @@ pub struct KeyValue {
 
 impl fmt::Display for KeyValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let key_str = str::from_utf8(&self.key[..]).unwrap();
-        let value_str = str::from_utf8(&self.value[..]).unwrap();
+        let key_str = String::from_utf8(self.key.to_vec()).unwrap();
+        let value_str = String::from_utf8(self.value.to_vec()).unwrap();
         write!(f, "{} {}", key_str, value_str)
     }
 }
@@ -108,7 +108,11 @@ impl KeyValue {
     /// Consumes the pair and returns a string
     #[inline]
     pub fn to_string(self) -> String {
-        format!("{} {}", String::from_utf8(self.key.to_vec()).unwrap(), String::from_utf8(self.value.to_vec()).unwrap())
+        format!(
+            "{} {}",
+            String::from_utf8(self.key.to_vec()).unwrap(),
+            String::from_utf8(self.value.to_vec()).unwrap()
+        )
     }
 }
 

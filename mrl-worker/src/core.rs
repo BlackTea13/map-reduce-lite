@@ -82,7 +82,7 @@ impl Worker for MRWorker {
 
             let _ = match work_request.job_message.unwrap() {
                 MapMessage(msg) => {
-                    map::perform_map(msg, &id, work_request.num_workers, &client, &address).await
+                    map::perform_map(msg, &id, work_request.num_workers, &client).await
                 }
                 ReduceMessage(msg) => reduce::perform_reduce(msg, &id, &client, &address).await,
             };

@@ -3,15 +3,16 @@
 // - Appy
 
 use std::sync::Arc;
+use anyhow::anyhow;
 
 use tokio::select;
 use tokio::sync::Mutex;
 use tonic::Request;
-use tracing::info;
+use tracing::{debug, info};
 
 use common::minio::{path_to_bucket_key, Client};
 
-use crate::core::worker::MapJobRequest;
+use crate::core::worker::{KillWorkerRequest, MapJobRequest};
 use crate::core::worker::{received_work_request::JobMessage, ReduceJobRequest};
 use crate::core::ReceivedWorkRequest;
 use crate::worker_info::WorkerID;
@@ -330,7 +331,7 @@ async fn create_straggler_request(
     let output = path_to_bucket_key(&output_path)?;
     let (bucket_out, key_out) = (output.bucket, output.key);
 
-    if (matches!(current_state, WorkerState::Mapping)) {
+    if matches!(current_state, WorkerState::Mapping) {
         let map_message = MapJobRequest {
             bucket_in: bucket_in,
             input_keys: straggler_input.to_vec(),
@@ -373,13 +374,28 @@ async fn straggler_vs_free_worker(
     let output = path_to_bucket_key(&output_path)?;
     let (bucket_out, _) = (output.bucket, output.key);
 
+    let kill_message = KillWorkerRequest {};
+    let request = KillWorkerRequest {};
+    let request = Request::new(request);
+
+    let key_prefix = "temp/straggler_copy/temp";
+
+
     select! {
         _ = wait_for_worker_to_become_free(registry.clone(), free_worker_id) => {
+            let registry_lock = registry.lock().await;
+
             info!("Free worker {} is done", free_worker_id);
 
-            let key_prefix = "temp/straggler_copy/temp";
 
-            // Wait for object to exist because of S3's upload latency
+
+            let worker = registry_lock.get_worker(straggler_id).ok_or(anyhow!("Failed to find worker"))?;
+
+            let mut worker_client = worker.client.clone();
+
+            worker_client.kill_worker(request).await?;
+
+                        // Wait for object to exist because of S3's upload latency
             // Ref: https://stackoverflow.com/questions/8856316/amazon-s3-how-to-deal-with-the-delay-from-upload-to-object-availability
             while client.list_objects_in_dir(&bucket_out, &key_prefix).await?.is_empty() {
                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
@@ -389,9 +405,10 @@ async fn straggler_vs_free_worker(
 
         },
         _ = wait_for_worker_to_become_free(registry.clone(), straggler_id) => {
-            info!("Straggler worker {} is done", straggler_id);
 
-            let key_prefix = "temp/straggler_copy/temp";
+            let registry_lock = registry.lock().await;
+
+            info!("Straggler worker {} is done", straggler_id);
 
             // Wait for object to exist because of S3's upload latency
             // Ref: https://stackoverflow.com/questions/8856316/amazon-s3-how-to-deal-with-the-delay-from-upload-to-object-availability
@@ -404,6 +421,12 @@ async fn straggler_vs_free_worker(
             for source_object in source_objects {
                 client.delete_object(&bucket_out, &source_object).await?;
             }
+
+            let worker = registry_lock.get_worker(free_worker_id).ok_or(anyhow!("Failed to find worker"))?;
+
+            let mut worker_client = worker.client.clone();
+
+            worker_client.kill_worker(request).await?;
         },
         _ = tokio::time::sleep(tokio::time::Duration::from_secs(30)) => {
             info!("Timeout waiting for workers to become free");

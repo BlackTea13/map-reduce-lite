@@ -43,8 +43,14 @@ message AckRequest {
 }
 message AckResponse {}
 
+message KillWorkerRequest {}
+
+message KillWorkerResponse {
+    bool success = 1;
+}
+
 service Worker {
   rpc ReceivedWork (ReceivedWorkRequest) returns (ReceivedWorkResponse);
   rpc Ack (AckRequest) returns (AckResponse);
+  rpc KillWorker (KillWorkerRequest) returns (KillWorkerResponse);
 }
-

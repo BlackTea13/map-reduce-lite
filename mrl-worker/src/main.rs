@@ -1,5 +1,6 @@
 use clap::Parser;
 use tokio::signal;
+use tokio::sync::{mpsc, oneshot};
 use tonic::transport::Server;
 use tracing::{error, info};
 
@@ -15,12 +16,17 @@ mod map;
 
 mod reduce;
 
-async fn start_server(port: u16, address: String, client_config: ClientConfig) {
+async fn start_server(
+    port: u16,
+    address: String,
+    client_config: ClientConfig,
+    sender: mpsc::Sender<()>,
+) {
     tokio::task::spawn(async move {
         let addr = format!("[::1]:{}", port).parse().unwrap();
         info!("Worker server listening on {}", addr);
 
-        let worker = MRWorker::new(address, client_config);
+        let worker = MRWorker::new(address, client_config, sender);
 
         let svc = WorkerServer::new(worker);
 
@@ -44,6 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let request = tonic::Request::new(WorkerJoinRequest {
         port: args.port as u32,
     });
+    let (shutdown_sender, mut shutdown_receiver) = mpsc::channel(32);
 
     // Start server as background task.
     let minio_client_config = ClientConfig {
@@ -52,24 +59,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         region: args.region,
         url: args.minio_url,
     };
-    start_server(args.port, address_clone, minio_client_config).await;
+
+    start_server(
+        args.port,
+        address_clone,
+        minio_client_config,
+        shutdown_sender,
+    )
+    .await;
     let response = client.worker_join(request).await?;
 
     let worker_id = response.into_inner().worker_id;
 
     info!("Worker registered (ID={})", worker_id & 0xFFFF);
 
-    match signal::ctrl_c().await {
-        Ok(()) => {
-            info!("Worker server exited...");
+    // Await the shutdown signal
+    tokio::select! {
+        result = signal::ctrl_c() => match result {
+            Ok(()) => {
+                info!("Worker server exited...");
+                let leave_request = tonic::Request::new(WorkerLeaveRequest { worker_id });
+                client.worker_leave(leave_request).await?;
+                Ok(())
+            }
+            Err(err) => {
+                error!("Fatal error encountered {}", err);
+                // we also shut down in case of error
+                Err(format!("Unable to listen for shutdown signal: {}", err).into())
+            }
+        },
+        _ = shutdown_receiver.recv() => {
+            info!("Shutdown signal received...");
             let leave_request = tonic::Request::new(WorkerLeaveRequest { worker_id });
             client.worker_leave(leave_request).await?;
             Ok(())
-        }
-        Err(err) => {
-            error!("Fatal error encountered {}", err);
-            // we also shut down in case of error
-            Err(format!("Unable to listen for shutdown signal: {}", err).into())
         }
     }
 }

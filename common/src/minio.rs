@@ -10,8 +10,8 @@ use aws_smithy_types::error::metadata::ProvideErrorMetadata;
 use bytes::Bytes;
 use globset::Glob;
 use tokio::fs::File;
-use tokio::io::copy;
 use tokio::io::AsyncReadExt;
+use tokio::io::{copy, AsyncWriteExt};
 use tracing::{debug, error, info};
 use url::Url;
 
@@ -123,6 +123,7 @@ impl Client {
             .bucket(bucket)
             .key(key)
             .body(ByteStream::from(data))
+            .content_type("text/html;charset=utf-8")
             .send()
             .await?;
         Ok(())
@@ -320,42 +321,19 @@ impl Client {
             "{dir}/mr-in-{}",
             key.split('/').collect::<Vec<_>>().last().unwrap()
         );
+        let mut stream = self
+            .client
+            .get_object()
+            .bucket(bucket)
+            .key(key)
+            .send()
+            .await?
+            .body;
 
-        // Define the part size (e.g., 5 MB)
-        let part_size = 1 * 1024 * 1024;
-        let mut start_byte = 0;
-        let mut end_byte = part_size - 1;
+        let mut file = File::create(file_name).await?;
 
-        // Open the local file for writing
-        let mut file = File::create(file_name).await?; // FAILs
-
-        loop {
-            // Define the byte range for the part
-            let range = format!("bytes={}-{}", start_byte, end_byte);
-
-            // Download the part
-            let get_object_request = self
-                .client
-                .get_object()
-                .bucket(bucket)
-                .key(key)
-                .range(range);
-
-            let get_object_output = get_object_request.send().await?;
-            let body = get_object_output.body; // .unwrap();
-            let mut body_stream = body.into_async_read();
-
-            // Write the part to the local file
-            copy(&mut body_stream, &mut file).await?;
-
-            // Update the byte range for the next part
-            start_byte = end_byte + 1;
-            end_byte += part_size;
-
-            // Check if we have reached the end of the file
-            if start_byte >= get_object_output.content_length.unwrap() as u64 {
-                break;
-            }
+        while let Some(bytes) = stream.try_next().await? {
+            file.write_all(&bytes).await?;
         }
 
         Ok(())

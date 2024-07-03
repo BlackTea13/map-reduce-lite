@@ -1,8 +1,10 @@
+use std::fs;
 use std::sync::Arc;
 
 use tokio::sync::{mpsc, Mutex};
 use tonic::{Request, Response, Status};
 use tracing::{debug, error, info};
+use walkdir::WalkDir;
 
 use common::minio::{Client, ClientConfig};
 //
@@ -89,7 +91,7 @@ impl Worker for MRWorker {
 
             let _ = match work_request.job_message.unwrap() {
                 MapMessage(msg) => {
-                    map::perform_map(msg, &id, work_request.num_workers, &client).await
+                    map::perform_map(msg, work_request.num_workers,&id, &client).await
                 }
                 ReduceMessage(msg) => reduce::perform_reduce(msg, &id, &client).await,
             };
@@ -132,6 +134,18 @@ impl Worker for MRWorker {
         if self.sender.clone().send(()).await.is_err() {
             return Err(Status::internal("Failed to send shutdown signal"));
         }
+
+        // clean up locally cc: @Appy
+        let _ = tokio::task::spawn(async move {
+            for entry in WalkDir::new("/var/tmp/") {
+                if let Ok(entry) = entry {
+                    if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("mrl") {
+                        let _ = fs::remove_dir_all(entry.path());
+                    }
+                }
+            }
+        }).await;
+
         let reply = KillWorkerResponse { success: true };
         Ok(Response::new(reply))
     }

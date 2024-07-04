@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use tokio::sync::{mpsc, Mutex};
 use tonic::{Request, Response, Status};
 use tracing::{debug, error, info};
@@ -11,11 +12,11 @@ use common::minio::{Client, ClientConfig};
 pub use coordinator::{
     coordinator_client::CoordinatorClient, WorkerJoinRequest, WorkerLeaveRequest,
 };
-pub use worker::worker_server::{Worker, WorkerServer};
 pub use worker::{
     AckRequest, AckResponse, KillWorkerRequest, KillWorkerResponse, MapJobRequest,
     ReceivedWorkRequest, ReceivedWorkResponse,
 };
+pub use worker::worker_server::{Worker, WorkerServer};
 
 use crate::core::coordinator::WorkerDoneRequest;
 use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceMessage};
@@ -47,11 +48,7 @@ pub struct MRWorker {
 }
 
 impl MRWorker {
-    pub fn new(
-        address: String,
-        client_config: ClientConfig,
-        sender: mpsc::Sender<()>,
-    ) -> MRWorker {
+    pub fn new(address: String, client_config: ClientConfig, sender: mpsc::Sender<()>) -> MRWorker {
         MRWorker {
             state: WorkerState::Idle,
             id: Arc::new(Mutex::new(None)),
@@ -87,12 +84,16 @@ impl Worker for MRWorker {
         tokio::task::spawn(async move {
             let id = id.clone().lock().await.unwrap();
 
-            let _ = match work_request.job_message.unwrap() {
+            let result = match work_request.job_message.unwrap() {
                 MapMessage(msg) => {
                     map::perform_map(msg, &id, work_request.num_workers, &client).await
                 }
                 ReduceMessage(msg) => reduce::perform_reduce(msg, &id, &client).await,
             };
+
+            if let Err(e) = result {
+                error!("{}", anyhow!(e));
+            }
 
             let coordinator_connect = CoordinatorClient::connect(address.clone()).await;
 

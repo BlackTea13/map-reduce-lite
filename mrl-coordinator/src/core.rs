@@ -1,22 +1,22 @@
-use std::time::Duration;
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
+use std::time::Duration;
 
 use tokio::sync::{Mutex, Notify};
 use tonic::{Request, Response, Status};
 use tracing::info;
 
-pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
 use coordinator::*;
-pub use worker::{worker_client::WorkerClient, AckRequest, ReceivedWorkRequest};
+pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
+pub use worker::{AckRequest, ReceivedWorkRequest, worker_client::WorkerClient};
 
-use crate::jobs::{Job, JobQueue};
-use crate::minio::{Client, ClientConfig};
-use crate::worker_info::WorkerID;
 use crate::{
     jobs,
     worker_info::{Worker, WorkerState},
     worker_registry::WorkerRegistry,
 };
+use crate::jobs::{Job, JobQueue};
+use crate::minio::{Client, ClientConfig};
+use crate::worker_info::WorkerID;
 
 pub mod coordinator {
     tonic::include_proto!("coordinator");

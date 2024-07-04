@@ -103,6 +103,22 @@ impl WorkerRegistry {
             .collect()
     }
 
+    /// Retrieve `n` free workers
+    pub fn get_n_free_workers(&self, n: usize) -> Vec<WorkerID> {
+        let vendor = &self.worker_vendor;
+
+        let worker_free = |worker: &WorkerInfo| {
+            vendor.worker_valid(worker.id) && matches!(worker.state, WorkerState::Free)
+        };
+
+        self.worker_list
+            .iter()
+            .filter(|worker| worker_free(worker))
+            .map(|worker| worker.id)
+            .take(n)
+            .collect()
+    }
+
     /// Size of the worker registry, only counting valid workers.
     pub fn len(&self) -> usize {
         self.get_workers().len()

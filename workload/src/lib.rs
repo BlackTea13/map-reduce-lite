@@ -21,6 +21,7 @@ use anyhow::{bail, Result};
 use common::Workload;
 
 pub mod grep;
+pub mod matrix_multiply;
 pub mod vertex_degree;
 pub mod wc;
 
@@ -40,6 +41,14 @@ pub fn try_named(name: &str) -> Option<Workload> {
         "vertex-degree" => Some(Workload {
             map_fn: vertex_degree::map,
             reduce_fn: vertex_degree::reduce,
+        }),
+        "matrix-multiply-1" => Some(Workload {
+            map_fn: matrix_multiply::map_phase_one,
+            reduce_fn: matrix_multiply::reduce_phase_one,
+        }),
+        "matrix-multiply-2" => Some(Workload {
+            map_fn: matrix_multiply::map_phase_two,
+            reduce_fn: matrix_multiply::reduce_phase_two,
         }),
         _ => None,
     }

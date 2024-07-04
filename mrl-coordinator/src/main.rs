@@ -64,11 +64,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let job_queue_notifier = coordinator.clone_job_queue_notifier();
     let registry = coordinator.clone_registry();
 
-    // Remove me. This is just for ensuring that the connection works.
-    if let Err(e) = show_buckets(&coordinator.s3_client.client).await {
-        dbg!(e);
-    }
-
     tokio::task::spawn(async move {
         loop {
             info!(" - Waiting for job");

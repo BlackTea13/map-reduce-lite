@@ -63,8 +63,8 @@ async fn _process_job_queue(
     //
     // // 2. Reduce stage.
     process_reduce_job(&client, registry.clone(), job).await?;
-
-    // Wait for workers to be complete.
+    //
+    // // Wait for workers to be complete.
     monitor_workers(&client, registry.clone(), job, WorkerState::Reducing).await?;
 
     Ok(())
@@ -246,6 +246,7 @@ async fn monitor_workers(
     }
 }
 
+
 async fn handling_stragglers(
     client: &Client,
     registry: Arc<Mutex<WorkerRegistry>>,
@@ -253,79 +254,88 @@ async fn handling_stragglers(
     current_state: WorkerState,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let job_clone = job.clone();
-    let registry_lock = registry.lock().await;
 
-    let stragglers: Vec<&WorkerID> = job_clone
-        .get_workers()
-        .iter()
-        .filter(|&worker_id| {
-            registry_lock.get_worker_state(*worker_id).unwrap() == current_state
-        })
-        .collect();
+    let stragglers: Vec<WorkerID> = {
+        let registry_lock = registry.lock().await;
+        job_clone
+            .get_workers()
+            .iter()
+            .filter(|&&worker_id| {
+                registry_lock.get_worker_state(worker_id).unwrap() == current_state
+            })
+            .cloned()
+            .collect()
+    };
 
-    let mut free_workers: Vec<&WorkerID> = job_clone
-        .get_workers()
-        .iter()
-        .filter(|&worker_id| {
-            matches!(
-                registry_lock.get_worker_state(*worker_id),
-                Some(WorkerState::Free)
-            )
-        })
-        .collect();
+    let mut index = 0;
+    while index < stragglers.len() {
+        let straggler_id = stragglers[index];
+        let job_clone = job.clone();
 
-    for straggler_id in stragglers {
-        if let Some(free_worker_id) = free_workers.pop() {
+        let free_worker_id = {
+            let registry_lock = registry.lock().await;
+            let free_workers: Vec<WorkerID> = job_clone.get_workers().iter().filter(|&&worker_id| {
+                matches!(
+                    registry_lock.get_worker_state(worker_id),
+                    Some(WorkerState::Free))
+            }).cloned().collect();
 
-            let worker = registry_lock.get_worker(*free_worker_id).unwrap();
-            let mut worker_client = worker.client.clone();
+            free_workers.first().cloned()
+        };
 
-            let request =
+        if let Some(free_worker_id) = free_worker_id {
+
+            let request = {
+                let mut registry_lock = registry.lock().await;
+                let mut worker = registry_lock.get_worker_mut(free_worker_id).unwrap();
+                worker.set_state(current_state);
+
                 match current_state {
                     WorkerState::Mapping => {
                         let straggler_input = job_clone.get_worker_map_files(&straggler_id).unwrap();
-                        job.set_worker_map_files(
-                            *free_worker_id,
-                           straggler_input.clone(),
-                        );
+                        job.set_worker_map_files(free_worker_id, straggler_input.clone());
                         create_straggler_request(job, current_state, straggler_id.clone(), &straggler_input, None).await
                     },
                     _ => {
                         let (index, straggler_input) = job_clone.get_worker_reduce_files(&straggler_id).unwrap();
-                        job.set_worker_reduce_files(
-                            *free_worker_id,
-                            *index,
-                            straggler_input.clone(),
-                        );
-                        create_straggler_request(job, current_state, straggler_id.clone(),&straggler_input, Some(*index)).await
+                        job.set_worker_reduce_files(free_worker_id, *index, straggler_input.clone());
+                        create_straggler_request(job, current_state, straggler_id.clone(), &straggler_input, Some(*index)).await
                     }
-                }?;
+                }?
+            };
 
-            worker_client.received_work(request).await?;
+            {
+                let mut registry_lock = registry.lock().await;
+                let mut worker = registry_lock.get_worker_mut(free_worker_id).unwrap();
+                worker.client.received_work(request).await?;
+            }
 
             let client_clone = client.clone();
-            let free_worker_id = free_worker_id.clone();
-            let straggler_id = straggler_id.clone();
-            let registry = registry.clone();
-            let mut job = job.clone();
+            let registry_clone = registry.clone();
+            let straggler_id_clone = straggler_id.clone();
+            let free_worker_id_clone = free_worker_id.clone();
+            let mut job_clone = job.clone();
 
             info!(
                 "Commencing a race between free {} and straggler {}",
-                free_worker_id.clone(),
-                straggler_id.clone()
+                free_worker_id_clone, straggler_id_clone
             );
 
             tokio::spawn(async move {
                 straggler_vs_free_worker(
                     &client_clone,
-                    straggler_id,
-                    free_worker_id,
-                    registry.clone(),
-                    &mut job,
+                    straggler_id_clone,
+                    free_worker_id_clone,
+                    registry_clone,
+                    &mut job_clone,
                     current_state
-                )
-                .await
+                ).await
             });
+
+            info!("Moving on to the next straggler");
+            index += 1;
+        } else {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
     }
 
@@ -370,7 +380,7 @@ async fn create_straggler_request(
             output: key_out,
             aux,
             workload,
-            reduce_id: index.unwrap() as u32,
+            reduce_id: index.unwrap(),
         })
     };
 
@@ -390,6 +400,7 @@ async fn straggler_vs_free_worker(
     job: &mut Job,
     current_state: WorkerState
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+
     let output_path = job.get_output_path().clone();
     let output = path_to_bucket_key(&output_path)?;
     let (bucket_out, _) = (output.bucket, output.key);
@@ -446,7 +457,6 @@ async fn straggler_vs_free_worker(
                 }
 
             }
-
 
             let worker = registry_lock.get_worker(free_worker_id).ok_or(anyhow!("Failed to find worker"))?;
 

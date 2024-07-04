@@ -23,6 +23,7 @@ dashmap = "5.5.3"
 walkdir = "2.5.0"
 ext-sort = "0.1.4"
 bytesize = "1.3.0"
+base64 = "0.22.1"
 
 
 [build-dependencies]

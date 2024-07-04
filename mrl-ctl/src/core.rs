@@ -1,7 +1,7 @@
 use clap::builder::TypedValueParser;
 
-use crate::core::coordinator::coordinator_client::CoordinatorClient;
 use crate::core::coordinator::AddJobRequest;
+use crate::core::coordinator::coordinator_client::CoordinatorClient;
 use crate::core::coordinator::JobsRequest;
 //
 // Import gRPC stubs/definitions.
@@ -53,7 +53,6 @@ pub async fn submit(
         aux,
     });
     let response = client.add_job(request).await?;
-    dbg!(response.into_inner());
 
     Ok(())
 }

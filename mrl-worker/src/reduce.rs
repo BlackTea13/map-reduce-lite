@@ -1,11 +1,13 @@
 use std::borrow::Cow;
 use std::fs;
 use std::fs::File;
-use std::io::BufReader;
 use std::io::{self, prelude::*};
+use std::io::BufReader;
 use std::path::Path;
 
 use anyhow::{anyhow, Error};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE};
+use base64::prelude::BASE64_URL_SAFE;
 use bytes::Bytes;
 use bytesize::MB;
 use dashmap::DashMap;
@@ -14,12 +16,12 @@ use glob::glob;
 use tracing::error;
 use walkdir::WalkDir;
 
-use common::minio::Client;
 use common::{ihash, KeyValue};
+use common::minio::Client;
 
+use crate::CoordinatorClient;
 use crate::core::worker::ReduceJobRequest;
 use crate::info;
-use crate::CoordinatorClient;
 
 // use tokio::fs::File;
 // use tokio::io::AsyncReadExt;
@@ -114,6 +116,10 @@ pub async fn perform_reduce(
         if let Ok(line) = line {
             let (key, value) = line.split_once(' ').unwrap();
             let (key, value) = (key.to_string(), value.to_string());
+            let (key, value) = (
+                String::from_utf8(URL_SAFE.decode(key)?)?,
+                String::from_utf8(URL_SAFE.decode(value)?)?,
+            );
 
             if previous_key == "" {
                 previous_key = key;
@@ -149,9 +155,8 @@ pub async fn perform_reduce(
     out_file.write_all(&out)?;
 
     let output_key = format!("{output_path}/mr-out-{}", worker_id & 0xFFFF);
-    client
-        .upload_file(&bucket, &output_key, out_pathspec)
-        .await?;
+
+    client.upload_file(&bucket, &output_key, out_pathspec).await?;
 
     // cleanup temp files on local
     tokio::task::spawn(async move {

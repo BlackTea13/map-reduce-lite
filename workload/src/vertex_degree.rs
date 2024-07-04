@@ -5,8 +5,8 @@
 use anyhow::{anyhow, Result};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
-use common::utils::string_from_bytes;
 use common::{KeyValue, MapOutput};
+use common::utils::string_from_bytes;
 
 fn parse_line(line: &str) -> Result<(u64, u64)> {
     let mut iter = line.split_whitespace().take(2);

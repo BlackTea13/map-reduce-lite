@@ -3,19 +3,21 @@ use std::ops::Deref;
 use std::path::Path;
 
 use anyhow::{anyhow, Error};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE};
+use base64::Engine;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use dashmap::DashMap;
 use glob::glob;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
-use tracing::info;
+use tracing::{error, info};
 use walkdir::WalkDir;
 
-use common::minio::Client;
 use common::{ihash, KeyValue};
+use common::minio::Client;
 
-use crate::core::MapJobRequest;
 use crate::CoordinatorClient;
+use crate::core::MapJobRequest;
 
 const WORKING_DIR: &str = "/var/tmp/";
 
@@ -32,16 +34,22 @@ pub async fn upload_objects(
     for (index, records) in buckets {
         let mut buffer = BytesMut::new();
         for record in records {
-            buffer.put_slice(record.key.iter().as_slice());
+            let key_encoded = URL_SAFE.encode(record.key.iter().as_slice());
+            let value_encoded = URL_SAFE.encode(record.value.iter().as_slice());
+
+            buffer.put_slice(key_encoded.as_bytes());
             buffer.put_slice(b" ");
-            buffer.put_slice(record.value.iter().as_slice());
+            buffer.put_slice(value_encoded.as_bytes());
             buffer.put_slice(b"\n");
         }
 
         let worker_id = worker_id & 0xFFFF;
         let out_key = format!("{path}/temp/mr-in-{index}-{worker_id}");
 
-        client.put_object(bucket, &out_key, buffer.freeze()).await?;
+        match client.put_object(bucket, &out_key, buffer.freeze()).await {
+            Ok(_) => {}
+            Err(e) => error!("{}", anyhow!(e)),
+        }
     }
 
     Ok(())

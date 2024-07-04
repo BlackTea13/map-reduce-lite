@@ -4,24 +4,24 @@
 
 use std::io::{Error, ErrorKind};
 use std::sync::Arc;
-use anyhow::anyhow;
 
+use anyhow::anyhow;
 use tokio::select;
 use tokio::sync::Mutex;
 use tonic::Request;
 use tracing::{debug, info};
 
-use common::minio::{path_to_bucket_key, Client};
+use common::minio::{Client, path_to_bucket_key};
 
-use crate::core::worker::{KillWorkerRequest, MapJobRequest};
-use crate::core::worker::{received_work_request::JobMessage, ReduceJobRequest};
-use crate::core::ReceivedWorkRequest;
-use crate::worker_info::WorkerID;
 use crate::{
     jobs::{Job, JobQueue},
     worker_info::WorkerState,
     worker_registry::WorkerRegistry,
 };
+use crate::core::ReceivedWorkRequest;
+use crate::core::worker::{received_work_request::JobMessage, ReduceJobRequest};
+use crate::core::worker::{KillWorkerRequest, MapJobRequest};
+use crate::worker_info::WorkerID;
 
 pub async fn process_job_queue(
     client: Client,
@@ -51,7 +51,7 @@ async fn _process_job_queue(
     //       phases, we have to clear job worker list and call this
     //       again. We can't just call this again because we might
     //       add duplicates into the job's worker ID list.
-    assign_workers_to_job(registry.clone(), job).await?;
+    assign_workers_to_job(registry.clone(), &client, job).await?;
 
     // Handle the job in stages.
 
@@ -72,9 +72,15 @@ async fn _process_job_queue(
 
 async fn assign_workers_to_job(
     registry: Arc<Mutex<WorkerRegistry>>,
+    client: &Client,
     job: &mut Job,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let workers = { registry.lock().await.get_free_workers() };
+    let input_path = job.get_input_path();
+    let bucket_key = path_to_bucket_key(input_path)?;
+    let (bucket, key) = (bucket_key.bucket, bucket_key.key);
+    let num_workers_needed = client.list_objects_in_dir(&bucket, &key).await?.len();
+
+    let workers = { registry.lock().await.get_n_free_workers(num_workers_needed) };
 
     if workers.is_empty() {
         return Err("Failed to assign workers - None available".into());
@@ -151,9 +157,12 @@ async fn get_reduce_input_files(
     key: &str,
     index: usize,
 ) -> Result<Vec<String>, anyhow::Error> {
-    let dir = format!("{}/temp/mr-in-{}", &key, index);
+    let dir = match key {
+        "" => format!("temp/mr-in-{}", index),
+        _ => format!("{}/temp/mr-in-{}", &key, index),
+    };
 
-    client.list_objects_in_dir(&bucket, &dir[1..]).await
+    client.list_objects_in_dir(&bucket, &dir[..]).await
 }
 
 /// Process reduce job.
@@ -410,7 +419,6 @@ async fn straggler_vs_free_worker(
     let request = Request::new(request);
 
     let key_prefix = "temp/straggler_copy/temp";
-
 
     select! {
         _ = wait_for_worker_to_become_free(registry.clone(), free_worker_id) => {

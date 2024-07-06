@@ -69,9 +69,9 @@ pub async fn perform_map(
     let aux = request.aux;
     let worker_id: u32 = request.worker_id as u32;
 
-    /// TODO: Remove me when straggler is done
-    // if *worker_id_test == 2 {
-    //     tokio::time::sleep(tokio::time::Duration::from_secs(10000)).await;
+    // TODO: Remove me when straggler is done
+    // if worker_id == 1 {
+    //     tokio::time::sleep(tokio::time::Duration::from_secs(6)).await;
     // }
 
     info!("Received map task with workload `{workload}`");

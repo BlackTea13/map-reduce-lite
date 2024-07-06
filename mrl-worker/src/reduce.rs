@@ -66,8 +66,8 @@ pub async fn perform_reduce(
     info!("Received reduce task with workload `{workload}`");
 
     /// TODO: Remove me when straggler is done
-    // if *worker_id_test == 1 {
-    //     tokio::time::sleep(tokio::time::Duration::from_secs(10000)).await;
+    // if worker_id == 1 {
+    //     tokio::time::sleep(tokio::time::Duration::from_secs(6)).await;
     // }
 
     let workload = match workload::try_named(&workload) {

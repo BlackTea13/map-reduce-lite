@@ -15,7 +15,7 @@ use tracing::{debug, info};
 use common::minio::{path_to_bucket_key, Client};
 
 use crate::core::worker::{received_work_request::JobMessage, ReduceJobRequest};
-use crate::core::worker::{KillWorkerRequest, MapJobRequest, InterruptWorkerRequest};
+use crate::core::worker::{InterruptWorkerRequest, KillWorkerRequest, MapJobRequest};
 use crate::core::ReceivedWorkRequest;
 use crate::worker_info::WorkerID;
 use crate::{
@@ -453,7 +453,6 @@ async fn straggler_vs_free_worker(
     let output_path = job.get_output_path().clone();
     let output = path_to_bucket_key(&output_path)?;
     let (bucket_out, _) = (output.bucket, output.key);
-
 
     let (key_prefix, dest_path) = match current_state {
         WorkerState::Mapping => ("temp/straggler_copy/temp", "temp"),

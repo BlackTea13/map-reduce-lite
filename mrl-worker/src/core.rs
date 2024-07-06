@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use tokio::select;
-use tokio::sync::{mpsc, Mutex, oneshot};
+use tokio::sync::{mpsc, oneshot, Mutex};
 use tonic::{Request, Response, Status};
 use tracing::{debug, error, info};
 use walkdir::WalkDir;
@@ -17,8 +17,8 @@ pub use coordinator::{
 };
 pub use worker::worker_server::{Worker, WorkerServer};
 pub use worker::{
-    AckRequest, AckResponse, KillWorkerRequest, KillWorkerResponse, MapJobRequest,
-    ReceivedWorkRequest, ReceivedWorkResponse, InterruptWorkerRequest, InterruptWorkerResponse
+    AckRequest, AckResponse, InterruptWorkerRequest, InterruptWorkerResponse, KillWorkerRequest,
+    KillWorkerResponse, MapJobRequest, ReceivedWorkRequest, ReceivedWorkResponse,
 };
 
 use crate::core::coordinator::WorkerDoneRequest;
@@ -204,18 +204,23 @@ impl Worker for MRWorker {
         Ok(Response::new(reply))
     }
 
-    async fn interrupt_worker(&self, request: Request<InterruptWorkerRequest>) -> Result<Response<InterruptWorkerResponse>, Status> {
+    async fn interrupt_worker(
+        &self,
+        request: Request<InterruptWorkerRequest>,
+    ) -> Result<Response<InterruptWorkerResponse>, Status> {
         info!("Interrupt signal received");
 
         {
             let mut interrupt_sender_lock = self.interrupt_sender.lock().await;
             if let Some(interrupt_sender) = interrupt_sender_lock.take() {
-                interrupt_sender.send(()).await.map_err(|_| Status::unknown("Failed to send interrupt"))?;
+                interrupt_sender
+                    .send(())
+                    .await
+                    .map_err(|_| Status::unknown("Failed to send interrupt"))?;
             }
         }
 
         let reply = InterruptWorkerResponse { success: true };
         Ok(Response::new(reply))
-
     }
 }

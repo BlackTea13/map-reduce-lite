@@ -67,7 +67,7 @@ pub async fn perform_map(
     let input_keys = request.input_keys;
     let workload = request.workload;
     let aux = request.aux;
-    let worker_id: &u32 = &(request.worker_id as u32);
+    let worker_id: u32 = request.worker_id as u32;
 
     /// TODO: Remove me when straggler is done
     // if *worker_id_test == 2 {
@@ -134,14 +134,14 @@ pub async fn perform_map(
     tokio::task::spawn(async move {
         for entry in WalkDir::new(WORKING_DIR) {
             if let Ok(entry) = entry {
-                if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("mrl") {
+                if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with(&format!("mrl-{}", worker_id)) {
                     let _ = fs::remove_dir_all(entry.path());
                 }
             }
         }
     });
 
-    upload_objects(&bucket_out, &output_key, buckets, worker_id, client).await?;
+    upload_objects(&bucket_out, &output_key, buckets, &worker_id, client).await?;
 
     Ok(())
 }

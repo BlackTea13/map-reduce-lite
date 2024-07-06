@@ -60,11 +60,11 @@ async fn _process_job_queue(
 
     // Wait for workers to be complete.
     monitor_workers(&client, registry.clone(), job, WorkerState::Mapping).await?;
-    //
-    // // 2. Reduce stage.
+
+    // 2. Reduce stage.
     process_reduce_job(&client, registry.clone(), job).await?;
-    //
-    // // Wait for workers to be complete.
+
+    // Wait for workers to be complete.
     monitor_workers(&client, registry.clone(), job, WorkerState::Reducing).await?;
 
     Ok(())

@@ -111,6 +111,15 @@ impl Job {
         self.workers.push(worker_id);
     }
 
+    pub fn remove_worker(&mut self, worker_id: &WorkerID) -> bool {
+        if let Some(pos) = self.workers.iter().position(|x| x == worker_id) {
+            self.workers.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+
     /// Add workers to job.
     pub fn add_workers(&mut self, worker_ids: Vec<WorkerID>) {
         worker_ids

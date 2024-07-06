@@ -8,6 +8,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use tokio::select;
 use tokio::sync::Mutex;
+use tokio::task::{JoinHandle, JoinSet};
 use tonic::Request;
 use tracing::{debug, info};
 
@@ -56,12 +57,14 @@ async fn _process_job_queue(
     // Handle the job in stages.
 
     // 1. Mapping stage.
+    info!("Starting map stage");
     process_map_job(&client, registry.clone(), job).await?;
 
     // Wait for workers to be complete.
     monitor_workers(&client, registry.clone(), job, WorkerState::Mapping).await?;
 
     // 2. Reduce stage.
+    info!("Starting reduce stage");
     process_reduce_job(&client, registry.clone(), job).await?;
 
     // Wait for workers to be complete.
@@ -277,6 +280,8 @@ async fn handling_stragglers(
             .collect()
     };
 
+    let mut set = JoinSet::new();
+
     let mut index = 0;
     while index < stragglers.len() {
         let straggler_id = stragglers[index];
@@ -306,11 +311,13 @@ async fn handling_stragglers(
                         job.set_worker_map_files(free_worker_id, straggler_input.clone());
                         create_straggler_request(job, current_state, straggler_id.clone(), &straggler_input, None).await
                     },
-                    _ => {
+                    WorkerState::Reducing => {
                         let (index, straggler_input) = job_clone.get_worker_reduce_files(&straggler_id).unwrap();
                         job.set_worker_reduce_files(free_worker_id, *index, straggler_input.clone());
                         create_straggler_request(job, current_state, straggler_id.clone(), &straggler_input, Some(*index)).await
                     }
+                    // Can't reach this case as the only states that will be passed in the function is Map or Reduce
+                    _ => unreachable!()
                 }?
             };
 
@@ -331,7 +338,7 @@ async fn handling_stragglers(
                 free_worker_id_clone, straggler_id_clone
             );
 
-            tokio::spawn(async move {
+            set.spawn(async move {
                 straggler_vs_free_worker(
                     &client_clone,
                     straggler_id_clone,
@@ -342,12 +349,17 @@ async fn handling_stragglers(
                 ).await
             });
 
-            info!("Moving on to the next straggler");
             index += 1;
         } else {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
     }
+
+    while let Some(res) = set.join_next().await {
+        if let Some(worker_id) = res?? {
+            job.remove_worker(&worker_id);
+        }
+    };
 
     Ok(())
 }
@@ -410,7 +422,7 @@ async fn straggler_vs_free_worker(
     registry: Arc<Mutex<WorkerRegistry>>,
     job: &mut Job,
     current_state: WorkerState
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<Option<WorkerID>, Box<dyn std::error::Error + Send + Sync>> {
 
     let output_path = job.get_output_path().clone();
     let output = path_to_bucket_key(&output_path)?;
@@ -420,16 +432,15 @@ async fn straggler_vs_free_worker(
     let request = KillWorkerRequest {};
     let request = Request::new(request);
 
-    let key_prefix = {
-        if matches!(current_state,WorkerState::Mapping) {
-            "temp/straggler_copy/temp"
-        }
-        else {
-            "reduce/straggler_copy"
-        }
+
+    let (key_prefix, dest_path) = match current_state {
+        WorkerState::Mapping => ("temp/straggler_copy/temp", "temp"),
+        WorkerState::Reducing => ("reduce/straggler_copy", "/"),
+        // Can't reach this case as the only states that will be passed in the function is Map or Reduce
+        _ => unreachable!()
     };
 
-    select! {
+    let result = select! {
         _ = wait_for_worker_to_become_free(registry.clone(), free_worker_id) => {
             let registry_lock = registry.lock().await;
 
@@ -441,19 +452,15 @@ async fn straggler_vs_free_worker(
 
             worker_client.kill_worker(request).await?;
 
-
             // Wait for object to exist because of S3's upload latency
             // Ref: https://stackoverflow.com/questions/8856316/amazon-s3-how-to-deal-with-the-delay-from-upload-to-object-availability
             while client.list_objects_in_dir(&bucket_out, &key_prefix).await?.is_empty() {
                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             }
 
+            client.move_objects(&bucket_out,key_prefix,dest_path).await?;
 
-            if matches!(current_state, WorkerState::Mapping) {
-                client.move_objects(&bucket_out,"temp/straggler_copy/temp","temp").await?;
-            } else {
-                client.move_objects(&bucket_out,"reduce/straggler_copy","/").await?;
-            };
+            Some(straggler_id)
 
         },
         _ = wait_for_worker_to_become_free(registry.clone(), straggler_id) => {
@@ -479,13 +486,15 @@ async fn straggler_vs_free_worker(
             let mut worker_client = worker.client.clone();
 
             worker_client.kill_worker(request).await?;
+            None
         },
         _ = tokio::time::sleep(tokio::time::Duration::from_secs(30)) => {
             info!("Timeout waiting for workers to become free");
+            None
         },
-    }
+    };
 
-    Ok(())
+    Ok(result)
 }
 
 async fn wait_for_worker_to_become_free(registry: Arc<Mutex<WorkerRegistry>>, worker_id: WorkerID) {

@@ -197,6 +197,7 @@ async fn process_reduce_job(
             aux: job_clone.get_args().clone(),
             workload: job_clone.get_workload().clone(),
             reduce_id: index,
+            worker_id: worker.id
         };
 
         info!("Saving files for worker {}", worker.id.clone());
@@ -386,10 +387,11 @@ async fn create_straggler_request(
         JobMessage::ReduceMessage(ReduceJobRequest {
             bucket: bucket_in,
             inputs: straggler_input.clone(),
-            output: key_out,
+            output: format!("{}/reduce/straggler_copy", key_out),
             aux,
             workload,
             reduce_id: index.unwrap(),
+            worker_id
         })
     };
 
@@ -418,7 +420,14 @@ async fn straggler_vs_free_worker(
     let request = KillWorkerRequest {};
     let request = Request::new(request);
 
-    let key_prefix = "temp/straggler_copy/temp";
+    let key_prefix = {
+        if matches!(current_state,WorkerState::Mapping) {
+            "temp/straggler_copy/temp"
+        }
+        else {
+            "reduce/straggler_copy"
+        }
+    };
 
     select! {
         _ = wait_for_worker_to_become_free(registry.clone(), free_worker_id) => {
@@ -432,16 +441,18 @@ async fn straggler_vs_free_worker(
 
             worker_client.kill_worker(request).await?;
 
-            if matches!(WorkerState::Mapping, current_state) {
 
-                // Wait for object to exist because of S3's upload latency
-                // Ref: https://stackoverflow.com/questions/8856316/amazon-s3-how-to-deal-with-the-delay-from-upload-to-object-availability
-                while client.list_objects_in_dir(&bucket_out, &key_prefix).await?.is_empty() {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                }
+            // Wait for object to exist because of S3's upload latency
+            // Ref: https://stackoverflow.com/questions/8856316/amazon-s3-how-to-deal-with-the-delay-from-upload-to-object-availability
+            while client.list_objects_in_dir(&bucket_out, &key_prefix).await?.is_empty() {
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            }
 
+
+            if matches!(current_state, WorkerState::Mapping) {
                 client.move_objects(&bucket_out,"temp/straggler_copy/temp","temp").await?;
-
+            } else {
+                client.move_objects(&bucket_out,"reduce/straggler_copy","/").await?;
             };
 
         },
@@ -451,19 +462,16 @@ async fn straggler_vs_free_worker(
 
             info!("Straggler worker {} is done", straggler_id);
 
-            if matches!(WorkerState::Mapping, current_state){
-                // Wait for object to exist because of S3's upload latency
-                // Ref: https://stackoverflow.com/questions/8856316/amazon-s3-how-to-deal-with-the-delay-from-upload-to-object-availability
-                while client.list_objects_in_dir(&bucket_out, &key_prefix).await?.is_empty() {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                }
+            // Wait for object to exist because of S3's upload latency
+            // Ref: https://stackoverflow.com/questions/8856316/amazon-s3-how-to-deal-with-the-delay-from-upload-to-object-availability
+            while client.list_objects_in_dir(&bucket_out, &key_prefix).await?.is_empty() {
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            }
 
-                let source_objects = client.list_objects_in_dir(&bucket_out, key_prefix).await?;
+            let source_objects = client.list_objects_in_dir(&bucket_out, key_prefix).await?;
 
-                for source_object in source_objects {
-                    client.delete_object(&bucket_out, &source_object).await?;
-                }
-
+            for source_object in source_objects {
+                client.delete_object(&bucket_out, &source_object).await?;
             }
 
             let worker = registry_lock.get_worker(free_worker_id).ok_or(anyhow!("Failed to find worker"))?;

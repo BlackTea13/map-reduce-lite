@@ -54,7 +54,6 @@ pub fn external_sort(filename: &str) -> String {
 
 pub async fn perform_reduce(
     request: ReduceJobRequest,
-    worker_id: &u32,
     client: &Client,
 ) -> Result<(), Error> {
     let aux = request.aux;
@@ -63,8 +62,13 @@ pub async fn perform_reduce(
     let output_path = request.output;
     let reduce_id = request.reduce_id;
     let workload = request.workload;
-
+    let worker_id = request.worker_id;
     info!("Received reduce task with workload `{workload}`");
+
+    /// TODO: Remove me when straggler is done
+    // if *worker_id_test == 1 {
+    //     tokio::time::sleep(tokio::time::Duration::from_secs(10000)).await;
+    // }
 
     let workload = match workload::try_named(&workload) {
         Some(wl) => wl,
@@ -174,7 +178,7 @@ pub async fn perform_reduce(
         }
     });
 
-    // cleanup temp files in S3
+    // // cleanup temp files in S3
     let temp_path = match output_path.as_str() {
         "" => "temp",
         _ => &format!("{}/temp", output_path),

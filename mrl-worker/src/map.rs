@@ -58,7 +58,6 @@ pub async fn upload_objects(
 pub async fn perform_map(
     request: MapJobRequest,
     num_workers: u32,
-    worker_id_test: &u32,
     client: &Client,
 ) -> Result<(), Error> {
 
@@ -71,7 +70,7 @@ pub async fn perform_map(
     let worker_id: &u32 = &(request.worker_id as u32);
 
     /// TODO: Remove me when straggler is done
-    // if *worker_id_test & 1 == 1 {
+    // if *worker_id_test == 2 {
     //     tokio::time::sleep(tokio::time::Duration::from_secs(10000)).await;
     // }
 

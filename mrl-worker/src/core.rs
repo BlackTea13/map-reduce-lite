@@ -25,6 +25,9 @@ use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceM
 use crate::map;
 use crate::reduce;
 
+
+const WORKING_DIR: &str = "/var/tmp/";
+
 pub mod coordinator {
     tonic::include_proto!("coordinator");
 }
@@ -137,19 +140,22 @@ impl Worker for MRWorker {
         }
 
         // clean up locally cc: @Appy
-
-        for entry in WalkDir::new("/var/tmp") {
-            if let Ok(entry) = entry {
-                if entry.path().is_dir()
-                    && entry
-                    .file_name()
-                    .to_string_lossy()
-                    .starts_with(&"mrl".to_string())
-                {
-                    let _ = fs::remove_dir_all(entry.path());
+        //
+        tokio::task::spawn(async move {
+            for entry in WalkDir::new(WORKING_DIR) {
+                if let Ok(entry) = entry {
+                    if entry.path().is_dir()
+                        && entry
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with(&"mrl".to_string())
+                    {
+                        let _ = fs::remove_dir_all(entry.path());
+                    }
                 }
             }
-        }
+        });
+
 
 
         let reply = KillWorkerResponse { success: true };

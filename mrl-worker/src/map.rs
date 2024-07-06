@@ -3,8 +3,8 @@ use std::ops::Deref;
 use std::path::Path;
 
 use anyhow::{anyhow, Error};
-use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use base64::Engine;
+use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use dashmap::DashMap;
 use glob::glob;
@@ -13,11 +13,11 @@ use tokio::io::AsyncReadExt;
 use tracing::{error, info};
 use walkdir::WalkDir;
 
-use common::{ihash, KeyValue};
 use common::minio::Client;
+use common::{ihash, KeyValue};
 
-use crate::CoordinatorClient;
 use crate::core::MapJobRequest;
+use crate::CoordinatorClient;
 
 const WORKING_DIR: &str = "/var/tmp/";
 
@@ -60,7 +60,6 @@ pub async fn perform_map(
     num_workers: u32,
     client: &Client,
 ) -> Result<(), Error> {
-
     let bucket_in = request.bucket_in;
     let bucket_out = request.bucket_out;
     let output_key = request.output_path;
@@ -134,7 +133,12 @@ pub async fn perform_map(
     tokio::task::spawn(async move {
         for entry in WalkDir::new(WORKING_DIR) {
             if let Ok(entry) = entry {
-                if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with(&format!("mrl-{}", worker_id)) {
+                if entry.path().is_dir()
+                    && entry
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with(&format!("mrl-{}", worker_id))
+                {
                     let _ = fs::remove_dir_all(entry.path());
                 }
             }

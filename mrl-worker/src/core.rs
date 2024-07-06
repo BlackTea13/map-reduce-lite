@@ -14,17 +14,16 @@ use common::minio::{Client, ClientConfig};
 pub use coordinator::{
     coordinator_client::CoordinatorClient, WorkerJoinRequest, WorkerLeaveRequest,
 };
+pub use worker::worker_server::{Worker, WorkerServer};
 pub use worker::{
     AckRequest, AckResponse, KillWorkerRequest, KillWorkerResponse, MapJobRequest,
     ReceivedWorkRequest, ReceivedWorkResponse,
 };
-pub use worker::worker_server::{Worker, WorkerServer};
 
 use crate::core::coordinator::WorkerDoneRequest;
 use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceMessage};
 use crate::map;
 use crate::reduce;
-
 
 const WORKING_DIR: &str = "/var/tmp/";
 
@@ -90,9 +89,7 @@ impl Worker for MRWorker {
             let id = id.clone().lock().await.unwrap();
 
             let result = match work_request.job_message.unwrap() {
-                MapMessage(msg) => {
-                    map::perform_map(msg, work_request.num_workers,&client).await
-                }
+                MapMessage(msg) => map::perform_map(msg, work_request.num_workers, &client).await,
                 ReduceMessage(msg) => reduce::perform_reduce(msg, &client).await,
             };
 
@@ -146,17 +143,15 @@ impl Worker for MRWorker {
                 if let Ok(entry) = entry {
                     if entry.path().is_dir()
                         && entry
-                        .file_name()
-                        .to_string_lossy()
-                        .starts_with(&"mrl".to_string())
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with(&"mrl".to_string())
                     {
                         let _ = fs::remove_dir_all(entry.path());
                     }
                 }
             }
         });
-
-
 
         let reply = KillWorkerResponse { success: true };
         Ok(Response::new(reply))

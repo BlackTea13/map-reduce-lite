@@ -67,7 +67,7 @@ impl Job {
             workers: vec![],
             timeout: request.timeout,
             worker_map_files: HashMap::new(),
-            worker_reduce_files: HashMap::new()
+            worker_reduce_files: HashMap::new(),
         }
     }
 

@@ -357,6 +357,8 @@ async fn handling_stragglers(
 
     while let Some(res) = set.join_next().await {
         if let Some(worker_id) = res?? {
+            // Has room for improvement as this operation can be expensive so instead
+            // we can explore invalidating the worker with a flag instead
             job.remove_worker(&worker_id);
         }
     };

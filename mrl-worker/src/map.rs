@@ -3,8 +3,8 @@ use std::ops::Deref;
 use std::path::Path;
 
 use anyhow::{anyhow, Error};
-use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use base64::Engine;
+use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use dashmap::DashMap;
 use glob::glob;
@@ -13,11 +13,11 @@ use tokio::io::AsyncReadExt;
 use tracing::{error, info};
 use walkdir::WalkDir;
 
-use common::{ihash, KeyValue};
 use common::minio::Client;
+use common::{ihash, KeyValue};
 
-use crate::CoordinatorClient;
 use crate::core::MapJobRequest;
+use crate::CoordinatorClient;
 
 const WORKING_DIR: &str = "/var/tmp/";
 
@@ -57,20 +57,16 @@ pub async fn upload_objects(
 
 pub async fn perform_map(
     request: MapJobRequest,
-    worker_id: &u32,
     num_workers: u32,
     client: &Client,
 ) -> Result<(), Error> {
-    /// TODO: Remove me when straggler is done
-    // if *worker_id & 1 == 1 {
-    //     tokio::time::sleep(tokio::time::Duration::from_secs(10000)).await;
-    // }
     let bucket_in = request.bucket_in;
     let bucket_out = request.bucket_out;
     let output_key = request.output_path;
     let input_keys = request.input_keys;
     let workload = request.workload;
     let aux = request.aux;
+    let worker_id: u32 = request.worker_id as u32;
 
     info!("Received map task with workload `{workload}`");
 
@@ -132,14 +128,19 @@ pub async fn perform_map(
     tokio::task::spawn(async move {
         for entry in WalkDir::new(WORKING_DIR) {
             if let Ok(entry) = entry {
-                if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("mrl") {
+                if entry.path().is_dir()
+                    && entry
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with(&format!("mrl-{}", worker_id))
+                {
                     let _ = fs::remove_dir_all(entry.path());
                 }
             }
         }
     });
 
-    upload_objects(&bucket_out, &output_key, buckets, worker_id, client).await?;
+    upload_objects(&bucket_out, &output_key, buckets, &worker_id, client).await?;
 
     Ok(())
 }

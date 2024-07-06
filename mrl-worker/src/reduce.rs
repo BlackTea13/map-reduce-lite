@@ -1,13 +1,13 @@
 use std::borrow::Cow;
 use std::fs;
 use std::fs::File;
-use std::io::{self, prelude::*};
 use std::io::BufReader;
+use std::io::{self, prelude::*};
 use std::path::Path;
 
 use anyhow::{anyhow, Error};
-use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use base64::prelude::BASE64_URL_SAFE;
+use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use bytes::Bytes;
 use bytesize::MB;
 use dashmap::DashMap;
@@ -16,12 +16,12 @@ use glob::glob;
 use tracing::error;
 use walkdir::WalkDir;
 
-use common::{ihash, KeyValue};
 use common::minio::Client;
+use common::{ihash, KeyValue};
 
-use crate::CoordinatorClient;
 use crate::core::worker::ReduceJobRequest;
 use crate::info;
+use crate::CoordinatorClient;
 
 // use tokio::fs::File;
 // use tokio::io::AsyncReadExt;
@@ -52,18 +52,14 @@ pub fn external_sort(filename: &str) -> String {
     output_file_name
 }
 
-pub async fn perform_reduce(
-    request: ReduceJobRequest,
-    worker_id: &u32,
-    client: &Client,
-) -> Result<(), Error> {
+pub async fn perform_reduce(request: ReduceJobRequest, client: &Client) -> Result<(), Error> {
     let aux = request.aux;
     let bucket = request.bucket;
     let inputs = request.inputs;
     let output_path = request.output;
     let reduce_id = request.reduce_id;
     let workload = request.workload;
-
+    let worker_id = request.worker_id;
     info!("Received reduce task with workload `{workload}`");
 
     let workload = match workload::try_named(&workload) {
@@ -156,7 +152,9 @@ pub async fn perform_reduce(
 
     let output_key = format!("{output_path}/mr-out-{}", worker_id & 0xFFFF);
 
-    client.upload_file(&bucket, &output_key, out_pathspec).await?;
+    client
+        .upload_file(&bucket, &output_key, out_pathspec)
+        .await?;
 
     // cleanup temp files on local
     tokio::task::spawn(async move {

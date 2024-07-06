@@ -46,8 +46,11 @@ pub struct Job {
     /// Timeout allowed before marked as straggler for worker
     timeout: u32,
 
-    /// Hashmap to store the files each worker is working on
-    worker_files: HashMap<WorkerID, Vec<String>>,
+    /// Hashmap to store the files each worker is mapping on
+    worker_map_files: HashMap<WorkerID, Vec<String>>,
+
+    /// Hashmap to store the files each worker is reducing on
+    worker_reduce_files: HashMap<WorkerID, (u32, Vec<String>)>,
 }
 
 impl Job {
@@ -63,7 +66,8 @@ impl Job {
             args: request.aux,
             workers: vec![],
             timeout: request.timeout,
-            worker_files: HashMap::new(),
+            worker_map_files: HashMap::new(),
+            worker_reduce_files: HashMap::new(),
         }
     }
 
@@ -107,6 +111,15 @@ impl Job {
         self.workers.push(worker_id);
     }
 
+    pub fn remove_worker(&mut self, worker_id: &WorkerID) -> bool {
+        if let Some(pos) = self.workers.iter().position(|x| x == worker_id) {
+            self.workers.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+
     /// Add workers to job.
     pub fn add_workers(&mut self, worker_ids: Vec<WorkerID>) {
         worker_ids
@@ -114,16 +127,29 @@ impl Job {
             .for_each(|worker_id| self.add_worker(worker_id));
     }
 
-    pub fn set_worker_files(
+    pub fn set_worker_map_files(
         &mut self,
         worker_id: WorkerID,
         files: Vec<String>,
     ) -> Option<Vec<String>> {
-        self.worker_files.insert(worker_id, files)
+        self.worker_map_files.insert(worker_id, files)
     }
 
-    pub fn get_worker_files(&self, worker_id: &WorkerID) -> Option<&Vec<String>> {
-        self.worker_files.get(worker_id)
+    pub fn get_worker_map_files(&self, worker_id: &WorkerID) -> Option<&Vec<String>> {
+        self.worker_map_files.get(worker_id)
+    }
+
+    pub fn set_worker_reduce_files(
+        &mut self,
+        worker_id: WorkerID,
+        index: u32,
+        files: Vec<String>,
+    ) -> Option<(u32, Vec<String>)> {
+        self.worker_reduce_files.insert(worker_id, (index, files))
+    }
+
+    pub fn get_worker_reduce_files(&self, worker_id: &WorkerID) -> Option<&(u32, Vec<String>)> {
+        self.worker_reduce_files.get(worker_id)
     }
 }
 

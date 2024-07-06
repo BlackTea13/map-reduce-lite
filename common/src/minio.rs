@@ -173,17 +173,6 @@ impl Client {
         Ok(())
     }
 
-    pub async fn rename_object(
-        &self,
-        bucket: &str,
-        old_key: &str,
-        new_key: &str,
-    ) -> Result<(), Error> {
-        self.delete_object(bucket, old_key).await?;
-        self.copy_object(bucket, old_key, new_key).await?;
-        Ok(())
-    }
-
     pub async fn list_objects(&self, bucket: &str) -> Result<Vec<String>, Error> {
         self.list_objects_in_dir(bucket, "").await
     }

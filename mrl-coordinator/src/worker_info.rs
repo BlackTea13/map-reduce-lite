@@ -1,10 +1,10 @@
 use std::net::SocketAddr;
 
 use tokio::select;
-use tonic::Status;
 use tonic::transport::Channel;
+use tonic::Status;
 
-use crate::core::{WorkerClient, WorkType};
+use crate::core::{WorkType, WorkerClient};
 
 pub type WorkerID = i32;
 pub type WorkerVersion = u16;

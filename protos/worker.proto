@@ -16,6 +16,7 @@ message MapJobRequest {
   string output_path = 4;
   string workload = 5;
   repeated string aux = 6;
+  int32 worker_id = 7;
 }
 
 message ReduceJobRequest {
@@ -32,6 +33,8 @@ message ReduceJobRequest {
   repeated string aux = 5;
 
   uint32 reduce_id = 6;
+
+  int32 worker_id = 7;
 }
 
 message ReceivedWorkResponse {

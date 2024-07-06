@@ -2,7 +2,8 @@ use std::fs;
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use tokio::sync::{mpsc, Mutex};
+use tokio::select;
+use tokio::sync::{mpsc, Mutex, oneshot};
 use tonic::{Request, Response, Status};
 use tracing::{debug, error, info};
 use walkdir::WalkDir;
@@ -17,10 +18,11 @@ pub use coordinator::{
 pub use worker::worker_server::{Worker, WorkerServer};
 pub use worker::{
     AckRequest, AckResponse, KillWorkerRequest, KillWorkerResponse, MapJobRequest,
-    ReceivedWorkRequest, ReceivedWorkResponse,
+    ReceivedWorkRequest, ReceivedWorkResponse, InterruptWorkerRequest, InterruptWorkerResponse
 };
 
 use crate::core::coordinator::WorkerDoneRequest;
+use crate::core::worker::received_work_request::JobMessage;
 use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceMessage};
 use crate::map;
 use crate::reduce;
@@ -49,6 +51,7 @@ pub struct MRWorker {
     id: Arc<Mutex<Option<u32>>>,
     address: String,
     sender: mpsc::Sender<()>,
+    interrupt_sender: Arc<Mutex<Option<mpsc::Sender<()>>>>,
 }
 
 impl MRWorker {
@@ -59,6 +62,7 @@ impl MRWorker {
             address,
             client: Client::from_conf(client_config),
             sender,
+            interrupt_sender: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -72,6 +76,12 @@ impl Worker for MRWorker {
         let address = self.address.clone();
         let id = self.id.clone();
         let client = self.client.clone();
+        let (interrupt_sender, mut interrupt_receiver) = mpsc::channel(32);
+
+        {
+            let mut sender = self.interrupt_sender.lock().await;
+            *sender = Some(interrupt_sender);
+        }
 
         {
             // Accept the work only if we are free
@@ -85,41 +95,66 @@ impl Worker for MRWorker {
 
         let work_request = request.into_inner();
 
-        tokio::task::spawn(async move {
-            let id = id.clone().lock().await.unwrap();
+        tokio::spawn(async move {
+            select! {
+                _ = async {
+                    let id = id.lock().await.clone().unwrap();
 
-            let result = match work_request.job_message.unwrap() {
-                MapMessage(msg) => {
-                    // Test for straggler: map
-                    // if id == 1 {
-                    //     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
-                    // }
-                    map::perform_map(msg, work_request.num_workers, &client).await
-                },
-                ReduceMessage(msg) => {
-                    // Test for straggler: reduce
-                    // if id == 1 {
-                    //     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
-                    // }
-                    reduce::perform_reduce(msg, &client).await
-                },
-            };
+                    let result = match work_request.job_message.unwrap() {
+                        MapMessage(msg) => {
+                            // Test for straggler: map
+                            // if id == 1 {
+                            //     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                            // }
+                            map::perform_map(msg, work_request.num_workers, &client).await
+                        },
+                        ReduceMessage(msg) => {
+                            // Test for straggler: map
+                            // if id == 1 {
+                            //     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                            // }
+                            reduce::perform_reduce(msg, &client).await
+                        },
+                    };
 
-            if let Err(e) = result {
-                error!("{}", anyhow!(e));
-            }
+                    if let Err(e) = result {
+                        error!("{}", anyhow!(e));
+                    }
 
-            let coordinator_connect = CoordinatorClient::connect(address.clone()).await;
+                    let coordinator_connect = CoordinatorClient::connect(address.clone()).await;
 
-            if let Ok(mut client) = coordinator_connect {
-                let request = Request::new(WorkerDoneRequest {
-                    worker_id: id as i32,
-                });
+                    if let Ok(mut client) = coordinator_connect {
+                        let request = Request::new(WorkerDoneRequest {
+                            worker_id: id as i32,
+                        });
 
-                if let Err(_) = client.worker_done(request).await {
-                    error!("Worker (ID={}) failed to finish job", id & 0xFFFF);
-                } else {
-                    info!("Worker (ID={}) done with job", id & 0xFFFF);
+                        if let Err(_) = client.worker_done(request).await {
+                            error!("Worker (ID={}) failed to finish job", id & 0xFFFF);
+                        } else {
+                            info!("Worker (ID={}) done with job", id & 0xFFFF);
+                        }
+                    }
+                } => {},
+                _ = interrupt_receiver.recv() => {
+                    let id = id.lock().await.clone().unwrap();
+
+                    let request = Request::new(WorkerDoneRequest {
+                        worker_id: id as i32,
+                    });
+
+                    let coordinator_connect = CoordinatorClient::connect(address.clone()).await;
+
+                    if let Ok(mut client) = coordinator_connect {
+                        let request = Request::new(WorkerDoneRequest {
+                            worker_id: id as i32,
+                        });
+
+                        if let Err(_) = client.worker_done(request).await {
+                            error!("Worker (ID={}) failed to finish job", id & 0xFFFF);
+                        } else {
+                            info!("Worker (ID={}) halted with job", id & 0xFFFF);
+                        }
+                    }
                 }
             }
         });
@@ -167,5 +202,20 @@ impl Worker for MRWorker {
 
         let reply = KillWorkerResponse { success: true };
         Ok(Response::new(reply))
+    }
+
+    async fn interrupt_worker(&self, request: Request<InterruptWorkerRequest>) -> Result<Response<InterruptWorkerResponse>, Status> {
+        info!("Interrupt signal received");
+
+        {
+            let mut interrupt_sender_lock = self.interrupt_sender.lock().await;
+            if let Some(interrupt_sender) = interrupt_sender_lock.take() {
+                interrupt_sender.send(()).await.map_err(|_| Status::unknown("Failed to send interrupt"))?;
+            }
+        }
+
+        let reply = InterruptWorkerResponse { success: true };
+        Ok(Response::new(reply))
+
     }
 }

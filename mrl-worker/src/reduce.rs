@@ -178,7 +178,7 @@ pub async fn perform_reduce(
         }
     });
 
-    // // cleanup temp files in S3
+    // cleanup temp files in S3
     let temp_path = match output_path.as_str() {
         "" => "temp",
         _ => &format!("{}/temp", output_path),

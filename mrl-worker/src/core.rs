@@ -89,8 +89,20 @@ impl Worker for MRWorker {
             let id = id.clone().lock().await.unwrap();
 
             let result = match work_request.job_message.unwrap() {
-                MapMessage(msg) => map::perform_map(msg, work_request.num_workers, &client).await,
-                ReduceMessage(msg) => reduce::perform_reduce(msg, &client).await,
+                MapMessage(msg) => {
+                    // Test for straggler: map
+                    // if id == 1 {
+                    //     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                    // }
+                    map::perform_map(msg, work_request.num_workers, &client).await
+                },
+                ReduceMessage(msg) => {
+                    // Test for straggler: reduce
+                    // if id == 1 {
+                    //     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                    // }
+                    reduce::perform_reduce(msg, &client).await
+                },
             };
 
             if let Err(e) = result {

@@ -62,10 +62,6 @@ pub async fn perform_reduce(request: ReduceJobRequest, client: &Client) -> Resul
     let worker_id = request.worker_id;
     info!("Received reduce task with workload `{workload}`");
 
-    /// TODO: Remove me when straggler is done
-    // if worker_id == 1 {
-    //     tokio::time::sleep(tokio::time::Duration::from_secs(6)).await;
-    // }
     let workload = match workload::try_named(&workload) {
         Some(wl) => wl,
         None => {

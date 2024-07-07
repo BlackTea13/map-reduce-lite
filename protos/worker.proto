@@ -52,8 +52,15 @@ message KillWorkerResponse {
     bool success = 1;
 }
 
+message InterruptWorkerRequest {}
+message InterruptWorkerResponse {
+    bool success = 1;
+}
+
+
 service Worker {
   rpc ReceivedWork (ReceivedWorkRequest) returns (ReceivedWorkResponse);
   rpc Ack (AckRequest) returns (AckResponse);
   rpc KillWorker (KillWorkerRequest) returns (KillWorkerResponse);
+  rpc InterruptWorker (InterruptWorkerRequest) returns (InterruptWorkerResponse);
 }

@@ -15,7 +15,7 @@ use tracing::{debug, info};
 use common::minio::{path_to_bucket_key, Client};
 
 use crate::core::worker::{received_work_request::JobMessage, ReduceJobRequest};
-use crate::core::worker::{KillWorkerRequest, MapJobRequest};
+use crate::core::worker::{InterruptWorkerRequest, KillWorkerRequest, MapJobRequest};
 use crate::core::ReceivedWorkRequest;
 use crate::worker_info::WorkerID;
 use crate::{
@@ -454,10 +454,6 @@ async fn straggler_vs_free_worker(
     let output = path_to_bucket_key(&output_path)?;
     let (bucket_out, _) = (output.bucket, output.key);
 
-    let kill_message = KillWorkerRequest {};
-    let request = KillWorkerRequest {};
-    let request = Request::new(request);
-
     let (key_prefix, dest_path) = match current_state {
         WorkerState::Mapping => ("temp/straggler_copy/temp", "temp"),
         WorkerState::Reducing => ("reduce/straggler_copy", "/"),
@@ -470,6 +466,8 @@ async fn straggler_vs_free_worker(
             let registry_lock = registry.lock().await;
 
             info!("Free worker {} is done", free_worker_id);
+
+            let request = Request::new(KillWorkerRequest {});
 
             let worker = registry_lock.get_worker(straggler_id).ok_or(anyhow!("Failed to find worker"))?;
 
@@ -494,6 +492,14 @@ async fn straggler_vs_free_worker(
 
             info!("Straggler worker {} is done", straggler_id);
 
+            let request = Request::new(InterruptWorkerRequest {});
+
+            let worker = registry_lock.get_worker(free_worker_id).ok_or(anyhow!("Failed to find worker"))?;
+
+            let mut worker_client = worker.client.clone();
+
+            worker_client.interrupt_worker(request).await?;
+
             // Wait for object to exist because of S3's upload latency
             // Ref: https://stackoverflow.com/questions/8856316/amazon-s3-how-to-deal-with-the-delay-from-upload-to-object-availability
             while client.list_objects_in_dir(&bucket_out, &key_prefix).await?.is_empty() {
@@ -506,11 +512,6 @@ async fn straggler_vs_free_worker(
                 client.delete_object(&bucket_out, &source_object).await?;
             }
 
-            let worker = registry_lock.get_worker(free_worker_id).ok_or(anyhow!("Failed to find worker"))?;
-
-            let mut worker_client = worker.client.clone();
-
-            worker_client.kill_worker(request).await?;
             None
         },
         _ = tokio::time::sleep(tokio::time::Duration::from_secs(30)) => {

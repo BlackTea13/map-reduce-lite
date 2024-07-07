@@ -97,6 +97,18 @@ impl MRCoordinator {
             let worker_status = format!("Worker (ID={:0>4}) - {:?}", index, worker.state);
             data.push(worker_status);
         }
+
+        let mut job_queue = self.get_job_queue().await;
+
+        if let Some(job) = job_queue.peek_job() {
+            let current_index = job_queue.get_current_index();
+            let job_status = format!("Current Job (ID={}) - {:?}", current_index, job.get_state());
+            data.push(job_status);
+        } else {
+            let free_status = String::from("No job being processed.");
+            data.push(free_status);
+        }
+
         data
     }
 

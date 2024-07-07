@@ -467,8 +467,7 @@ async fn straggler_vs_free_worker(
 
             info!("Free worker {} is done", free_worker_id);
 
-            let request = KillWorkerRequest {};
-            let request = Request::new(request);
+            let request = Request::new(KillWorkerRequest {});
 
             let worker = registry_lock.get_worker(straggler_id).ok_or(anyhow!("Failed to find worker"))?;
 
@@ -493,8 +492,7 @@ async fn straggler_vs_free_worker(
 
             info!("Straggler worker {} is done", straggler_id);
 
-            let request = InterruptWorkerRequest {};
-            let request = Request::new(request);
+            let request = Request::new(InterruptWorkerRequest {});
 
             let worker = registry_lock.get_worker(free_worker_id).ok_or(anyhow!("Failed to find worker"))?;
 

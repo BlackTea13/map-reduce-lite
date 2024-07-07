@@ -128,7 +128,7 @@ impl Worker for MRWorker {
                             worker_id: id as i32,
                         });
 
-                        if let Err(_) = client.worker_done(request).await {
+                        if client.worker_done(request).await.is_err() {
                             error!("Worker (ID={}) failed to finish job", id & 0xFFFF);
                         } else {
                             info!("Worker (ID={}) done with job", id & 0xFFFF);
@@ -149,7 +149,7 @@ impl Worker for MRWorker {
                             worker_id: id as i32,
                         });
 
-                        if let Err(_) = client.worker_done(request).await {
+                        if client.worker_done(request).await.is_err() {
                             error!("Worker (ID={}) failed to finish job", id & 0xFFFF);
                         } else {
                             info!("Worker (ID={}) halted with job", id & 0xFFFF);

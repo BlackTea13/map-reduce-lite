@@ -23,6 +23,7 @@ use crate::{
     worker_info::WorkerState,
     worker_registry::WorkerRegistry,
 };
+use crate::jobs::JobState;
 
 pub async fn process_job_queue(
     client: Client,
@@ -34,7 +35,7 @@ pub async fn process_job_queue(
         job_queue.pop_job().unwrap()
     };
 
-    let result = _process_job_queue(&mut job, client, registry.clone()).await;
+    let result = _process_job_queue(&mut job, client, registry.clone(), job_queue.clone()).await;
 
     result
 }
@@ -44,6 +45,7 @@ async fn _process_job_queue(
     job: &mut Job,
     client: Client,
     registry: Arc<Mutex<WorkerRegistry>>,
+    job_queue: Arc<Mutex<JobQueue>>
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Collect workers and assign them to the job.
     // NOTE: Right now, workers can't join while job is inflight.
@@ -58,6 +60,7 @@ async fn _process_job_queue(
 
     // 1. Mapping stage.
     info!("Starting map stage");
+    update_job_state(job_queue.clone(), JobState::Mapping).await;
     process_map_job(&client, registry.clone(), job).await?;
 
     // Wait for workers to be complete.
@@ -65,12 +68,20 @@ async fn _process_job_queue(
 
     // 2. Reduce stage.
     info!("Starting reduce stage");
+    update_job_state(job_queue.clone(), JobState::Reducing).await;
     process_reduce_job(&client, registry.clone(), job).await?;
 
     // Wait for workers to be complete.
     monitor_workers(&client, registry.clone(), job, WorkerState::Reducing).await?;
 
+    update_job_state(job_queue.clone(), JobState::Completed).await;
+
     Ok(())
+}
+
+async fn update_job_state(job_queue: Arc<Mutex<JobQueue>>, state: JobState) {
+    let mut job_queue = job_queue.lock().await;
+    job_queue.update_current_job_state(state);
 }
 
 async fn assign_workers_to_job(

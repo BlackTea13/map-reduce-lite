@@ -17,13 +17,13 @@ use common::minio::{path_to_bucket_key, Client};
 use crate::core::worker::{received_work_request::JobMessage, ReduceJobRequest};
 use crate::core::worker::{InterruptWorkerRequest, KillWorkerRequest, MapJobRequest};
 use crate::core::ReceivedWorkRequest;
+use crate::jobs::JobState;
 use crate::worker_info::WorkerID;
 use crate::{
     jobs::{Job, JobQueue},
     worker_info::WorkerState,
     worker_registry::WorkerRegistry,
 };
-use crate::jobs::JobState;
 
 pub async fn process_job_queue(
     client: Client,
@@ -45,7 +45,7 @@ async fn _process_job_queue(
     job: &mut Job,
     client: Client,
     registry: Arc<Mutex<WorkerRegistry>>,
-    job_queue: Arc<Mutex<JobQueue>>
+    job_queue: Arc<Mutex<JobQueue>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Collect workers and assign them to the job.
     // NOTE: Right now, workers can't join while job is inflight.

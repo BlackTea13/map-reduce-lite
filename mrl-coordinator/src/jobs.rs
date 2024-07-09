@@ -211,21 +211,19 @@ impl JobQueue {
     /// Return the current job.
     pub fn peek_job(&self) -> Option<&Job> {
         if self.current_index > 0 {
-            self.jobs.get(self.current_index-1)
+            self.jobs.get(self.current_index - 1)
         } else {
             None
         }
-
     }
 
     pub fn update_current_job_state(&mut self, state: JobState) {
         if self.current_index > 0 {
-            let job = self.jobs.get_mut(self.current_index-1);
+            let job = self.jobs.get_mut(self.current_index - 1);
             if let Some(job_mut) = job {
                 job_mut.state = state;
             }
         }
-
     }
 
     /// Push new job.

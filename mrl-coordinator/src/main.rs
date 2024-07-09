@@ -45,7 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     // Configure address.
-    let addr = format!("[::1]:{}", args.port).parse().unwrap();
+    let addr = format!("127.0.0.1:{}", args.port).parse().unwrap();
     info!("CoordinatorServer listening on {}", addr);
 
     // Create minio client config from cli arguments and retrieve minio client.

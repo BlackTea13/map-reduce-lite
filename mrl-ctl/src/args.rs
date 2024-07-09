@@ -19,7 +19,11 @@ pub enum Commands {
     Status,
     /// Submit a job to the cluster
     Submit {
-        /// Glob spec for the input files
+        // IP Address of Coordinator
+        #[arg(short, long)]
+        address: String,
+
+        // Glob spec for the input files
         #[arg(short, long)]
         input: String,
 

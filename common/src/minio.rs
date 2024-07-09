@@ -10,8 +10,8 @@ use aws_smithy_types::error::metadata::ProvideErrorMetadata;
 use bytes::Bytes;
 use globset::Glob;
 use tokio::fs::File;
-use tokio::io::{AsyncWriteExt, copy};
 use tokio::io::AsyncReadExt;
+use tokio::io::{copy, AsyncWriteExt};
 use tracing::{debug, error, info};
 use url::Url;
 

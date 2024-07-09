@@ -1,4 +1,4 @@
-use args::{Commands, parse_args};
+use args::{parse_args, Commands};
 
 mod args;
 
@@ -14,6 +14,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Status => core::status().await?,
         Commands::Submit {
+            address,
             input,
             workload,
             output,

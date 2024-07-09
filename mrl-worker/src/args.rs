@@ -4,7 +4,7 @@ use clap::Parser;
 #[command(version, about, long_about = None)]
 pub struct Args {
     /// The address of the coordinator server
-    #[arg(short = 'j', long = "join", default_value = "http://[::1]:8030")]
+    #[arg(short = 'j', long = "join", default_value = "http://127.0.0.1:8030")]
     pub address: String,
 
     /// The port to run the worker on.

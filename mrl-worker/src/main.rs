@@ -23,7 +23,7 @@ async fn start_server(
     sender: mpsc::Sender<()>,
 ) {
     tokio::task::spawn(async move {
-        let addr = format!("127.0.0.1:{}", port).parse().unwrap();
+        let addr = format!("0.0.0.0:{}", port).parse().unwrap();
         info!("Worker server listening on {}", addr);
 
         let worker = MRWorker::new(address, client_config, sender);

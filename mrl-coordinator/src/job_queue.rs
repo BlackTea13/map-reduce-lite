@@ -474,7 +474,11 @@ async fn straggler_vs_free_worker(
 
     let result = select! {
         _ = wait_for_worker_to_become_free(registry.clone(), free_worker_id) => {
-            let registry_lock = registry.lock().await;
+
+            let worker = {
+                let registry_lock = registry.lock().await;
+                registry_lock.get_worker(straggler_id).ok_or(anyhow!("Failed to find worker"))?
+            }
 
             info!("Free worker {} is done", free_worker_id);
 
@@ -499,7 +503,10 @@ async fn straggler_vs_free_worker(
         },
         _ = wait_for_worker_to_become_free(registry.clone(), straggler_id) => {
 
-            let registry_lock = registry.lock().await;
+            let worker = {
+                let registry_lock = registry.lock().await;
+                registry_lock.get_worker(free_worker_id).ok_or(anyhow!("Failed to find worker"))?
+            }
 
             info!("Straggler worker {} is done", straggler_id);
 

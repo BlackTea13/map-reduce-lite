@@ -117,7 +117,7 @@ impl WorkerState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WorkerInfo {
     /// Unique ID for each worker.
     pub id: WorkerID,

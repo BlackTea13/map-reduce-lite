@@ -16,8 +16,8 @@ const PORT: u16 = 8030;
 const TIMEOUT: u32 = 5;
 
 // Tasks
-pub async fn jobs() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = CoordinatorClient::connect(format!("http://[::1]:{}", PORT)).await?;
+pub async fn jobs(address: String) -> Result<(), Box<dyn std::error::Error>> {
+    let mut client = CoordinatorClient::connect(format!("{}", address)).await?;
     let request = tonic::Request::new(JobsRequest {});
     let response = client.jobs(request).await?;
 
@@ -58,8 +58,8 @@ pub async fn submit(
     Ok(())
 }
 
-pub async fn status() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = CoordinatorClient::connect(format!("http://[::1]:{}", PORT)).await?;
+pub async fn status(address: String) -> Result<(), Box<dyn std::error::Error>> {
+    let mut client = CoordinatorClient::connect(format!("{}", address)).await?;
     let request = tonic::Request::new(StatusRequest {});
     let response = client.status(request).await?;
 

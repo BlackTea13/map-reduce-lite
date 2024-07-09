@@ -13,10 +13,18 @@ pub struct Args {
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// List all tasks which have been submitted to the system and their statuses.
-    Jobs,
+    Jobs {
+        // IP Address of Coordinator
+        #[arg(short, long)]
+        address: String,
+    },
     /// Display the health status of the system, showing how many workers are registered,
     /// what the coordinator is doing and what the workers are doing.
-    Status,
+    Status {
+        // IP Address of Coordinator
+        #[arg(short, long)]
+        address: String,
+    },
     /// Submit a job to the cluster
     Submit {
         // IP Address of Coordinator

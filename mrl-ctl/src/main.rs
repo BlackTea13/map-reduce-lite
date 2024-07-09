@@ -9,10 +9,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let command = parse_args();
 
     match command {
-        Commands::Jobs => {
-            core::jobs().await?;
+        Commands::Jobs { address } => {
+            core::jobs(address).await?;
         }
-        Commands::Status => core::status().await?,
+        Commands::Status { address } => core::status(address).await?,
         Commands::Submit {
             address,
             input,
@@ -20,7 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             output,
             args,
             timeout,
-        } => core::submit(input, output, workload, args, timeout).await?,
+        } => core::submit(address, input, output, workload, args, timeout).await?,
     }
 
     Ok(())

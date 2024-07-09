@@ -25,28 +25,18 @@ pub fn map(kv: KeyValue, _aux: Bytes) -> MapOutput {
     let s = string_from_bytes(kv.value)?;
     let edges = s.lines().map(parse_line).collect::<Result<Vec<_>>>()?;
 
-    let mut key_buf = BytesMut::with_capacity(8 * edges.len());
-    let mut value_buf = BytesMut::with_capacity(8 * edges.len());
+    // let mut key_buf = BytesMut::with_capacity(8 * edges.len());
+    // let mut value_buf = BytesMut::with_capacity(8 * edges.len());
 
     let iter = edges.into_iter().flat_map(move |(a, b)| {
-        key_buf.put_u64(a);
-        value_buf.put_u64(1);
-        let key1 = key_buf.split().freeze();
-        let value1 = value_buf.split().freeze();
-
-        key_buf.put_u64(b);
-        value_buf.put_u64(1);
-        let key2 = key_buf.split().freeze();
-        let value2 = value_buf.split().freeze();
-
         [
             Ok(KeyValue {
-                key: key1,
-                value: value1,
+                key: Bytes::from(a.to_string()),
+                value: Bytes::from("1"),
             }),
             Ok(KeyValue {
-                key: key2,
-                value: value2,
+                key: Bytes::from(b.to_string()),
+                value: Bytes::from("1"),
             }),
         ]
     });
@@ -61,11 +51,11 @@ pub fn reduce(
     let mut count = 0u64;
 
     for mut value in values {
-        count += value.get_u64();
+        count += String::from_utf8(value.to_vec())?.parse::<u64>()?;
     }
 
-    let mut value = BytesMut::with_capacity(8);
-    let vertex_no = key.clone().get_u64();
-    value.put(format!("{}, deg={}", &vertex_no, count).as_bytes());
+    let mut value = BytesMut::with_capacity(24);
+    let vertex_no = String::from_utf8(key.clone().to_vec())?;
+    value.put(format!("{}, deg={}\n", &vertex_no, count).as_bytes());
     Ok(value.freeze())
 }

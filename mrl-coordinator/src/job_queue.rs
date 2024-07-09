@@ -478,13 +478,11 @@ async fn straggler_vs_free_worker(
             let worker = {
                 let registry_lock = registry.lock().await;
                 registry_lock.get_worker(straggler_id).ok_or(anyhow!("Failed to find worker"))?
-            }
+            };
 
             info!("Free worker {} is done", free_worker_id);
 
             let request = Request::new(KillWorkerRequest {});
-
-            let worker = registry_lock.get_worker(straggler_id).ok_or(anyhow!("Failed to find worker"))?;
 
             let mut worker_client = worker.client.clone();
 
@@ -506,13 +504,11 @@ async fn straggler_vs_free_worker(
             let worker = {
                 let registry_lock = registry.lock().await;
                 registry_lock.get_worker(free_worker_id).ok_or(anyhow!("Failed to find worker"))?
-            }
+            };
 
             info!("Straggler worker {} is done", straggler_id);
 
             let request = Request::new(InterruptWorkerRequest {});
-
-            let worker = registry_lock.get_worker(free_worker_id).ok_or(anyhow!("Failed to find worker"))?;
 
             let mut worker_client = worker.client.clone();
 

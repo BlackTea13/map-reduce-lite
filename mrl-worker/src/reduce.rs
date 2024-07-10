@@ -54,9 +54,6 @@ pub fn external_sort(filename: &str) -> String {
 
 pub async fn perform_reduce(request: ReduceJobRequest, client: &Client) -> Result<(), Error> {
 
-    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-
-
     let request_clone = request.clone();
     let bucket = request_clone.bucket;
     let output_path = request_clone.output;
@@ -230,12 +227,6 @@ pub async fn perform_reduce_per_id(request: ReduceJobRequest, client: &Client, r
     client
         .upload_file(&bucket, &output_key, out_pathspec)
         .await?;
-
-
-    // cleanup temp files on local
-
-
-    //tokio::time::sleep(tokio::time::Duration::from_secs(4)).await;
 
     Ok(())
 

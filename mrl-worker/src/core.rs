@@ -106,9 +106,9 @@ impl Worker for MRWorker {
                             // Test for straggler: map
                             // info!("Sleeping");
                             // tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
-                            if id == 1 {
-                                tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
-                            }
+                            // if id == 1 {
+                            //     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                            // }
                             map::perform_map(msg, work_request.num_workers, &client).await
                         },
                         ReduceMessage(msg) => {

@@ -4,7 +4,7 @@
 
 use std::fmt;
 use std::fmt::Formatter;
-use std::hash::Hasher;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::str;
 
 use bytes::Bytes;
@@ -125,9 +125,15 @@ pub fn ihash(key: &[u8]) -> u32 {
     u32::try_from(value).expect("Failed to compute ihash of value")
 }
 
+fn calculate_hash<T: Hash + ?Sized>(t: &T) -> u64 {
+    let mut s = DefaultHasher::new();
+    t.hash(&mut s);
+    s.finish()
+}
+
 const SEED: i64 = 1234;
 pub fn hash(key: &[u8]) -> u32 {
-    fasthash::metro::hash64(key) as u32
+   calculate_hash(key) as u32
 }
 
 /////////////////////////////////////////////////////////////////

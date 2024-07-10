@@ -81,12 +81,13 @@ pub fn reduce_phase_one(
 
     let mut buffer = BytesMut::new();
 
+
     for row_a in &matrix_a {
         let row = *row_a.first().unwrap();
 
         for row_b in &matrix_b {
-            let val_a = str::parse::<i64>(row_a[1])?;
-            let val_b = str::parse::<i64>(row_b[1])?;
+            let val_a = str::parse::<f64>(row_a[1])?;
+            let val_b = str::parse::<f64>(row_b[1])?;
             let prod = val_a * val_b;
 
             let row = format!("{} {} {} {}", row, row_b[0], prod, "C");
@@ -133,11 +134,11 @@ pub fn reduce_phase_two(
 ) -> Result<Bytes> {
     let rows = values.collect::<Vec<_>>();
 
-    let mut sum: i64 = 0;
+    let mut sum: f64 = 0.0;
     for row in rows {
         let string = String::from_utf8(row.to_vec())?;
         let split = string.split(" ").collect::<Vec<_>>();
-        let value = str::parse::<i64>(split[0])?;
+        let value = str::parse::<f64>(split[0])?;
         sum = sum + value;
     }
 

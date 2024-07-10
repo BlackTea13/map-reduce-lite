@@ -68,6 +68,7 @@ impl Job {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_job_state(&self) -> JobState {
         self.state
     }
@@ -184,6 +185,7 @@ impl JobQueue {
         self.jobs.len()
     }
 
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -212,6 +214,7 @@ impl JobQueue {
     }
 
     /// Decrement pointer.
+    #[allow(dead_code)]
     pub fn revert(&mut self) {
         self.current_index -= 1;
     }
@@ -240,6 +243,7 @@ impl JobQueue {
     }
 
     /// Flush all jobs. Get rid of all history.
+    #[allow(dead_code)]
     pub fn flush(&mut self) {
         self.jobs.clear();
         self.current_index = 0;

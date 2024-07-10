@@ -89,6 +89,7 @@ impl WorkerRegistry {
     }
 
     /// Retrieve free workers.
+    #[allow(dead_code)]
     pub fn get_free_workers(&self) -> Vec<WorkerID> {
         let vendor = &self.worker_vendor;
 

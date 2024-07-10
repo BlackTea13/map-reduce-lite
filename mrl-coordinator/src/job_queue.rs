@@ -34,9 +34,7 @@ pub async fn process_job_queue(
         job_queue.pop_job().unwrap()
     };
 
-    let result = _process_job_queue(&mut job, client, registry.clone(), job_queue.clone()).await;
-
-    result
+    _process_job_queue(&mut job, client, registry.clone(), job_queue.clone()).await
 }
 
 /// Pop a job from the queue and perform it.
@@ -155,7 +153,7 @@ async fn process_map_job(
             output_path: path_out.clone(),
             workload: job.get_workload().clone(),
             aux: job.get_args().clone(),
-            worker_id: worker.id.clone(),
+            worker_id: worker.id,
         };
 
         info!("Saving files for worker {}", worker.id.clone());
@@ -210,7 +208,7 @@ async fn process_reduce_job(
     // Where output files are written to. (dir)
     let output_root = job_clone.get_output_path();
 
-    let bucket_key = path_to_bucket_key(&output_root)?;
+    let bucket_key = path_to_bucket_key(output_root)?;
     let (bucket, output_key) = (bucket_key.bucket, bucket_key.key);
 
     let workers = job_clone.get_workers();
@@ -218,11 +216,11 @@ async fn process_reduce_job(
 
     let mut index = 0;
     let mut worker_index = 0;
-    let mut worker_reduce_ids: Vec<Vec<u32>> = vec![vec![]; workers.len().clone()];
+    let mut worker_reduce_ids: Vec<Vec<u32>> = vec![vec![]; workers.len()];
     while index < total_workers {
         worker_reduce_ids[worker_index].push(index as u32);
         worker_index += 1;
-        worker_index = worker_index % workers.len();
+        worker_index %= workers.len();
         index += 1;
     }
 
@@ -277,7 +275,7 @@ pub async fn set_job_worker_state(
         let mut registry = registry.lock().await;
         workers
             .iter()
-            .for_each(|&worker_id| registry.set_worker_state(worker_id, state.clone()));
+            .for_each(|&worker_id| registry.set_worker_state(worker_id, state));
     }
 
     Ok(())
@@ -290,7 +288,7 @@ async fn monitor_workers(
     job: &mut Job,
     current_state: WorkerState,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let timeout = job.get_timeout().clone();
+    let timeout = job.get_timeout();
 
     select! {
         _ = wait_workers_free(registry.clone(), job) => {
@@ -299,7 +297,7 @@ async fn monitor_workers(
         },
         _ = tokio::time::sleep(tokio::time::Duration::from_secs(timeout as u64)) => {
             info!("Stragglers detected...");
-            let _ = handling_stragglers(&client,registry.clone(), job, current_state, timeout).await;
+            let _ = handling_stragglers(client,registry.clone(), job, current_state, timeout).await;
 
             Ok(())
         }
@@ -366,8 +364,8 @@ async fn handling_stragglers(
                             create_straggler_request(
                                 job,
                                 current_state,
-                                straggler_id.clone(),
-                                &straggler_input,
+                                straggler_id,
+                                straggler_input,
                                 None,
                             )
                             .await
@@ -383,8 +381,8 @@ async fn handling_stragglers(
                             create_straggler_request(
                                 job,
                                 current_state,
-                                straggler_id.clone(),
-                                &straggler_input,
+                                straggler_id,
+                                straggler_input,
                                 Some(reduce_ids.clone()),
                             )
                             .await
@@ -402,8 +400,8 @@ async fn handling_stragglers(
 
                 let client_clone = client.clone();
                 let registry_clone = registry.clone();
-                let straggler_id_clone = straggler_id.clone();
-                let free_worker_id_clone = free_worker_id.clone();
+                let straggler_id_clone = straggler_id;
+                let free_worker_id_clone = free_worker_id;
                 let mut job_clone = job.clone();
 
                 info!(
@@ -446,7 +444,7 @@ async fn create_straggler_request(
     job: &mut Job,
     current_state: WorkerState,
     worker_id: WorkerID,
-    straggler_input: &Vec<String>,
+    straggler_input: &[String],
     reduce_ids: Option<Vec<u32>>,
 ) -> Result<Request<ReceivedWorkRequest>, Box<dyn std::error::Error + Send + Sync>> {
     let workload = job.get_workload().clone();
@@ -476,7 +474,7 @@ async fn create_straggler_request(
     } else {
         JobMessage::ReduceMessage(ReduceJobRequest {
             bucket: bucket_in,
-            inputs: straggler_input.clone(),
+            inputs: straggler_input.to_vec(),
             output: format!("{}/reduce/straggler_copy", key_out),
             aux,
             workload,
@@ -532,11 +530,11 @@ async fn straggler_vs_free_worker(
             // Ref: https://stackoverflow.com/questions/8856316/amazon-s3-how-to-deal-with-the-delay-from-upload-to-object-availability
 
             let path = &format!("{}/{}", &out_key, &key_prefix);
-            while client.list_objects_in_dir(&bucket_out, &path).await?.is_empty() {
+            while client.list_objects_in_dir(&bucket_out, path).await?.is_empty() {
                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             }
 
-            client.move_objects(&bucket_out,&path,format!("{}/{}", &out_key, &dest_path).as_str()).await?;
+            client.move_objects(&bucket_out,path,format!("{}/{}", &out_key, &dest_path).as_str()).await?;
 
             Some(straggler_id)
 

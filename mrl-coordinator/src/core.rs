@@ -25,14 +25,7 @@ pub mod worker {
     tonic::include_proto!("worker");
 }
 
-struct Submit {
-    input: String,
-    workload: String,
-    output: String,
-    args: Vec<String>,
-    timeout: u32,
-}
-
+#[allow(dead_code)]
 pub enum WorkType {
     Map,
     Reduce,
@@ -40,7 +33,10 @@ pub enum WorkType {
 
 #[derive(Debug)]
 pub struct MRCoordinator {
+    #[allow(unused)]
     pub s3_client: Client,
+
+    #[allow(unused)]
     jobs: VecDeque<jobs::Job>,
     worker_registry: Arc<Mutex<WorkerRegistry>>,
     job_queue: Arc<Mutex<JobQueue>>,

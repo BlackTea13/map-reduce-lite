@@ -1,4 +1,3 @@
-use aws_sdk_s3 as s3;
 use clap::Parser;
 use tonic::transport::Server;
 use tracing::info;
@@ -17,24 +16,6 @@ mod jobs;
 mod job_queue;
 mod worker_info;
 mod worker_registry;
-
-async fn show_buckets(client: &s3::Client) -> Result<(), Box<dyn std::error::Error>> {
-    let resp = client.list_buckets().send().await?;
-    let buckets = resp.buckets();
-    let num_buckets = buckets.len();
-
-    let mut bucket_names = "".to_owned();
-    for bucket in buckets {
-        let bucket_name = bucket.name().unwrap_or_default().to_owned();
-        bucket_names.push_str(&bucket_name);
-        bucket_names.push_str(", ");
-    }
-
-    info!("Found {} buckets in all regions.", num_buckets);
-    info!("Bucket names: {}", bucket_names);
-
-    Ok(())
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -55,6 +55,7 @@ impl Default for WorkerIDVendor {
 }
 
 impl WorkerIDVendor {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         WorkerIDVendor::default()
     }
@@ -109,6 +110,7 @@ pub enum WorkerState {
 }
 
 impl WorkerState {
+    #[allow(dead_code)]
     pub fn from_work_type(work_type: WorkType) -> WorkerState {
         match work_type {
             WorkType::Map => WorkerState::Mapping,
@@ -133,7 +135,6 @@ impl WorkerInfo {
     pub async fn new(id: WorkerID, addr: SocketAddr) -> Result<Self, Status> {
         let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
 
-        let sender_clone = sender.clone();
         tokio::task::spawn(async move {
             let mut client = WorkerClient::connect(format!("http://{}", addr).to_string()).await;
 

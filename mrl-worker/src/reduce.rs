@@ -108,8 +108,6 @@ pub async fn perform_reduce_per_id(request: ReduceJobRequest, client: &Client, r
         .collect();
 
 
-    dbg!(&inputs);
-
     info!("working on reduce_id {}", &reduce_id);
 
     let workload = match workload::try_named(&workload) {
@@ -128,18 +126,13 @@ pub async fn perform_reduce_per_id(request: ReduceJobRequest, client: &Client, r
         fs::create_dir_all(target_path)?;
     }
 
-    info!("got here first");
-
     for key in &inputs {
-        info!("key: {}", key);
         let res = client.download_object(&bucket, &key, &target_dir).await;
         match res {
             Ok(_) => {}
             Err(e) => info!("error: {}", e)
         }
     }
-
-    info!("got here");
 
     let reduce_func = workload.reduce_fn;
     let temp_file_path = format!("{target_dir}/*");
@@ -173,7 +166,6 @@ pub async fn perform_reduce_per_id(request: ReduceJobRequest, client: &Client, r
                 continue;
             }
 
-            info!("robert-1");
 
             let (key, value) = line.split_once(' ').unwrap();
             let (key, value) = (key.to_string(), value.to_string());
@@ -181,33 +173,23 @@ pub async fn perform_reduce_per_id(request: ReduceJobRequest, client: &Client, r
 
 
             if URL_SAFE.decode(&value).is_err() {
-                info!("failed decode value: {}",&value);
+                error!("failed decode value: {}",&value);
             }
             if String::from_utf8(URL_SAFE.decode(&value)?).is_err() {
-                info!("failed utf8 value: {}",&value);
+                error!("failed utf8 value: {}",&value);
             }
 
             if URL_SAFE.decode(&key).is_err() {
-                info!("failed decode key: {}",&key);
+                error!("failed decode key: {}",&key);
             }
             if String::from_utf8(URL_SAFE.decode(&key)?).is_err() {
-                info!("failed utf8 key: {}",&key);
+                error!("failed utf8 key: {}",&key);
             }
-
-
-
-            info!("robert0");
 
             let (key, value) = (
                 String::from_utf8(URL_SAFE.decode(key)?)?,
                 String::from_utf8(URL_SAFE.decode(value)?)?,
             );
-
-
-            info!("robert1");
-
-
-
 
 
             if previous_key == "" {
@@ -243,17 +225,12 @@ pub async fn perform_reduce_per_id(request: ReduceJobRequest, client: &Client, r
     )?;
     out_file.write_all(&out)?;
 
-    info!("robert4");
-
     let output_key = format!("{output_path}/mr-out-{}", reduce_id);
-
-    info!("robert5");
 
     client
         .upload_file(&bucket, &output_key, out_pathspec)
         .await?;
 
-    info!("robert6");
 
     // cleanup temp files on local
 

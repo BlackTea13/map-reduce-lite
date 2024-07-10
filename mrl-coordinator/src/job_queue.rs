@@ -528,11 +528,13 @@ async fn straggler_vs_free_worker(
 
             // Wait for object to exist because of S3's upload latency
             // Ref: https://stackoverflow.com/questions/8856316/amazon-s3-how-to-deal-with-the-delay-from-upload-to-object-availability
-            while client.list_objects_in_dir(&bucket_out, format!("{}/{}", out_key, &key_prefix).as_str()).await?.is_empty() {
+
+            let path = &format!("{}/{}", &out_key, &key_prefix);
+            while client.list_objects_in_dir(&bucket_out, &path).await?.is_empty() {
                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             }
 
-            client.move_objects(&bucket_out,key_prefix,dest_path).await?;
+            client.move_objects(&bucket_out,&path,dest_path).await?;
 
             Some(straggler_id)
 

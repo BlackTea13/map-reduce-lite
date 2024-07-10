@@ -1,11 +1,11 @@
 use std::fs;
 use std::fs::File;
-use std::io::BufReader;
 use std::io::{self, prelude::*};
+use std::io::BufReader;
 use std::path::Path;
 
 use anyhow::{anyhow, Error};
-use base64::{engine::general_purpose::URL_SAFE, Engine as _};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use bytes::Bytes;
 use bytesize::MB;
 use ext_sort::{buffer::LimitedBufferBuilder, ExternalSorter, ExternalSorterBuilder};

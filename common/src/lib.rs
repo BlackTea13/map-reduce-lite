@@ -125,6 +125,11 @@ pub fn ihash(key: &[u8]) -> u32 {
     u32::try_from(value).expect("Failed to compute ihash of value")
 }
 
+const SEED: i64 = 1234;
+pub fn hash(key: &[u8]) -> u32 {
+    gxhash::gxhash32(&key, SEED)
+}
+
 /////////////////////////////////////////////////////////////////
 
 #[derive(Parser, Debug)]

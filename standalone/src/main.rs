@@ -28,7 +28,7 @@ fn parse_args() -> Job {
 
 fn run_standalone_mr_job(job: Job, engine: Workload) -> Result<()> {
     let serialized_args = Bytes::from(serde_json::to_string(&job.args)?);
-    let n_reduce = 1;
+    let n_reduce = 3;
     /*  The map logic carries out mapping and also shuffle. This makes sense in
      *  the case of a standalone system.
      */

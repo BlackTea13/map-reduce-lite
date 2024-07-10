@@ -9,7 +9,7 @@ use dashmap::DashMap;
 use glob::glob;
 use itertools::Itertools;
 
-use common::{ihash, KeyValue, Workload};
+use common::{hash, KeyValue, Workload};
 
 use crate::*;
 
@@ -41,7 +41,7 @@ pub fn perform_map(
         let map_func = engine.map_fn;
         for item in map_func(input_kv, serialized_args.clone())? {
             let KeyValue { key, value } = item?;
-            let bucket_no = ihash(&key) % num_reduce_worker;
+            let bucket_no = hash(&key) % num_reduce_worker;
 
             #[allow(clippy::unwrap_or_default)]
             buckets

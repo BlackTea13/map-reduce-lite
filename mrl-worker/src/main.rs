@@ -78,6 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         shutdown_sender,
     )
     .await;
+
     let response = client.worker_join(request).await?;
 
     let worker_id = response.into_inner().worker_id;

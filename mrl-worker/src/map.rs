@@ -14,7 +14,7 @@ use tracing::{error, info};
 use walkdir::WalkDir;
 
 use common::minio::Client;
-use common::{ihash, KeyValue};
+use common::{hash, ihash, KeyValue};
 
 use crate::core::{MapJobRequest, WORKING_DIR_MAP};
 
@@ -120,7 +120,7 @@ pub async fn perform_map(
         let aux_bytes = Bytes::from(aux.clone().join(" "));
         for item in map_fn(input_kv, aux_bytes)? {
             let KeyValue { key, value } = item?;
-            let bucket_no = ihash(&key) % num_workers;
+            let bucket_no = hash(&key) % num_workers;
 
             #[allow(clippy::unwrap_or_default)]
             buckets

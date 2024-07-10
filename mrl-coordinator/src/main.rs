@@ -41,6 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Set up for processing job queue.
     let client = Client::from_conf(minio_client_config);
+
     let job_queue = coordinator.clone_job_queue();
     let job_queue_notifier = coordinator.clone_job_queue_notifier();
 

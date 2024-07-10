@@ -77,7 +77,7 @@ pub async fn perform_reduce(request: ReduceJobRequest, client: &Client) -> Resul
                         && entry
                         .file_name()
                         .to_string_lossy()
-                        .starts_with(&format!("mrl-{}", reduce_id))
+                        .starts_with(&format!("mrl-{}", reduce_id & 0xFFFF))
                     {
                         let _ = fs::remove_dir_all(entry.path());
                     }

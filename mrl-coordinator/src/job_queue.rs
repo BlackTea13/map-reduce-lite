@@ -84,7 +84,6 @@ async fn _process_job_queue(
         _ => &format!("{}/temp", output_path),
     };
 
-
     client.delete_path(&bucket_out, temp_path).await?;
 
     update_job_state(job_queue.clone(), JobState::Completed).await;
@@ -235,7 +234,13 @@ async fn process_reduce_job(
         let worker = registry.get_worker(*worker).unwrap();
         let mut worker_client = worker.client.clone();
 
-        let inputs = get_reduce_input_files(client, &bucket, &output_key, worker_reduce_ids[index].clone()).await?;
+        let inputs = get_reduce_input_files(
+            client,
+            &bucket,
+            &output_key,
+            worker_reduce_ids[index].clone(),
+        )
+        .await?;
 
         let reduce_message = ReduceJobRequest {
             bucket: bucket.clone(),
@@ -243,7 +248,7 @@ async fn process_reduce_job(
             output: output_key.clone(),
             aux: job_clone.get_args().clone(),
             workload: job_clone.get_workload().clone(),
-            reduce_ids: worker_reduce_ids[index].clone()
+            reduce_ids: worker_reduce_ids[index].clone(),
         };
 
         info!("Saving files for worker {}", worker.id.clone());
@@ -295,7 +300,7 @@ async fn monitor_workers(
         },
         _ = tokio::time::sleep(tokio::time::Duration::from_secs(timeout as u64)) => {
             info!("Stragglers detected...");
-            let _ = handling_stragglers(&client,registry.clone(), job, current_state).await;
+            let _ = handling_stragglers(&client,registry.clone(), job, current_state, timeout).await;
 
             Ok(())
         }
@@ -307,6 +312,7 @@ async fn handling_stragglers(
     registry: Arc<Mutex<WorkerRegistry>>,
     job: &mut Job,
     current_state: WorkerState,
+    timeout: u32,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let job_clone = job.clone();
 
@@ -346,11 +352,8 @@ async fn handling_stragglers(
             free_workers.first().cloned()
         };
 
-
         if let Some(free_worker_id) = free_worker_id {
-
             if free_worker_id != straggler_id {
-
                 let request = {
                     let mut registry_lock = registry.lock().await;
                     let mut worker = registry_lock.get_worker_mut(free_worker_id).unwrap();
@@ -368,7 +371,7 @@ async fn handling_stragglers(
                                 &straggler_input,
                                 None,
                             )
-                                .await
+                            .await
                         }
                         WorkerState::Reducing => {
                             let (reduce_ids, straggler_input) =
@@ -385,7 +388,7 @@ async fn handling_stragglers(
                                 &straggler_input,
                                 Some(reduce_ids.clone()),
                             )
-                                .await
+                            .await
                         }
                         // Can't reach this case as the only states that will be passed in the function is Map or Reduce
                         _ => unreachable!(),
@@ -405,9 +408,9 @@ async fn handling_stragglers(
                 let mut job_clone = job.clone();
 
                 info!(
-                "Commencing a race between free {} and straggler {}",
-                free_worker_id_clone, straggler_id_clone
-            );
+                    "Commencing a race between free {} and straggler {}",
+                    free_worker_id_clone, straggler_id_clone
+                );
 
                 set.spawn(async move {
                     straggler_vs_free_worker(
@@ -416,15 +419,14 @@ async fn handling_stragglers(
                         free_worker_id_clone,
                         registry_clone,
                         &mut job_clone,
+                        timeout,
                         current_state,
                     )
-                        .await
+                    .await
                 });
-
             }
 
             index += 1;
-
         } else {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
@@ -479,7 +481,7 @@ async fn create_straggler_request(
             output: format!("{}/reduce/straggler_copy", key_out),
             aux,
             workload,
-            reduce_ids: reduce_ids.unwrap()
+            reduce_ids: reduce_ids.unwrap(),
         })
     };
 
@@ -497,6 +499,7 @@ async fn straggler_vs_free_worker(
     free_worker_id: WorkerID,
     registry: Arc<Mutex<WorkerRegistry>>,
     job: &mut Job,
+    timeout: u32,
     current_state: WorkerState,
 ) -> Result<Option<WorkerID>, Box<dyn std::error::Error + Send + Sync>> {
     let output_path = job.get_output_path().clone();
@@ -568,7 +571,7 @@ async fn straggler_vs_free_worker(
 
             None
         },
-        _ = tokio::time::sleep(tokio::time::Duration::from_secs(30)) => {
+        _ = tokio::time::sleep(tokio::time::Duration::from_secs(timeout as u64)) => {
             info!("Timeout waiting for workers to become free");
             None
         },

@@ -142,10 +142,14 @@ impl Job {
         reduce_ids: Vec<u32>,
         files: Vec<String>,
     ) -> Option<(Vec<u32>, Vec<String>)> {
-        self.worker_reduce_files.insert(worker_id, (reduce_ids, files))
+        self.worker_reduce_files
+            .insert(worker_id, (reduce_ids, files))
     }
 
-    pub fn get_worker_reduce_files(&self, worker_id: &WorkerID) -> Option<&(Vec<u32>, Vec<String>)> {
+    pub fn get_worker_reduce_files(
+        &self,
+        worker_id: &WorkerID,
+    ) -> Option<&(Vec<u32>, Vec<String>)> {
         self.worker_reduce_files.get(worker_id)
     }
 

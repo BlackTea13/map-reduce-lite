@@ -59,7 +59,7 @@ async fn _process_job_queue(
     // Handle the job in stages.
     let output_path = job.get_output_path().clone();
     let output = path_to_bucket_key(&output_path)?;
-    let (bucket_out, _) = (output.bucket, output.key);
+    let (bucket_out, output_path) = (output.bucket, output.key);
 
     // 1. Mapping stage.
     info!("Starting map stage");
@@ -78,10 +78,10 @@ async fn _process_job_queue(
     monitor_workers(&client, registry.clone(), job, WorkerState::Reducing).await?;
 
     // cleanup temp files in S3
-    info!("{}", output_path);
+    // info!("{}", output_path);
     let temp_path = match output_path.as_str() {
         "" => "temp",
-        _ => &format!("{}/temp/", output_path),
+        _ => &*format!("{}/temp", output_path),
     };
 
 

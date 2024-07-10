@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
@@ -6,24 +5,19 @@ use std::io::{self, prelude::*};
 use std::path::Path;
 
 use anyhow::{anyhow, Error};
-use base64::prelude::BASE64_URL_SAFE;
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use bytes::Bytes;
 use bytesize::MB;
-use dashmap::DashMap;
 use ext_sort::{buffer::LimitedBufferBuilder, ExternalSorter, ExternalSorterBuilder};
 use glob::glob;
 use tracing::error;
 use walkdir::WalkDir;
 
 use common::minio::Client;
-use common::{ihash, KeyValue};
-use workload::wc::reduce;
 
 use crate::core::worker::ReduceJobRequest;
 use crate::core::WORKING_DIR_REDUCE;
 use crate::info;
-use crate::CoordinatorClient;
 
 // use tokio::fs::File;
 // use tokio::io::AsyncReadExt;
@@ -154,6 +148,7 @@ pub async fn perform_reduce_per_id(
 
     let mut previous_key = String::new();
     let mut values: Vec<Bytes> = vec![];
+
     for line in reader.lines() {
         if let Ok(line) = line {
             if line.is_empty() {

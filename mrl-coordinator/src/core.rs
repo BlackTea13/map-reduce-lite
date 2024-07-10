@@ -1,4 +1,3 @@
-use std::time::Duration;
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
 
 use tokio::sync::{Mutex, Notify};
@@ -98,7 +97,7 @@ impl MRCoordinator {
             data.push(worker_status);
         }
 
-        let mut job_queue = self.get_job_queue().await;
+        let job_queue = self.get_job_queue().await;
 
         if let Some(job) = job_queue.peek_job() {
             let current_index = job_queue.get_current_index();

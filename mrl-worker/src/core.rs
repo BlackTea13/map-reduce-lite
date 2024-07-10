@@ -3,9 +3,9 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use tokio::select;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, Mutex};
 use tonic::{Request, Response, Status};
-use tracing::{debug, error, info};
+use tracing::{error, info};
 use walkdir::WalkDir;
 
 use common::minio::{Client, ClientConfig};
@@ -22,7 +22,6 @@ pub use worker::{
 };
 
 use crate::core::coordinator::WorkerDoneRequest;
-use crate::core::worker::received_work_request::JobMessage;
 use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceMessage};
 use crate::map;
 use crate::reduce;

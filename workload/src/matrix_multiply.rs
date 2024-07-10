@@ -1,4 +1,3 @@
-use std::fmt::Display;
 use std::io::BufRead;
 
 /// MapReduce application for matrix multiplication.
@@ -80,7 +79,6 @@ pub fn reduce_phase_one(
         .collect::<Vec<_>>();
 
     let mut buffer = BytesMut::new();
-
 
     for row_a in &matrix_a {
         let row = *row_a.first().unwrap();

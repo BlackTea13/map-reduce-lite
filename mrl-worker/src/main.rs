@@ -1,6 +1,6 @@
 use clap::Parser;
 use tokio::signal;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 use tonic::transport::Server;
 use tracing::{error, info};
 

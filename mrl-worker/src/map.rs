@@ -1,11 +1,10 @@
 use std::fs;
-use std::ops::Deref;
 use std::path::Path;
 
 use anyhow::{anyhow, Error};
 use base64::Engine;
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use dashmap::DashMap;
 use glob::glob;
 use tokio::fs::File;
@@ -17,7 +16,6 @@ use common::minio::Client;
 use common::{ihash, KeyValue};
 
 use crate::core::{MapJobRequest, WORKING_DIR_MAP};
-use crate::CoordinatorClient;
 
 const WORKING_DIR: &str = "/var/tmp/map/";
 

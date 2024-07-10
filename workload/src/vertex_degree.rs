@@ -3,7 +3,7 @@
 //!
 
 use anyhow::{anyhow, Result};
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 
 use common::utils::string_from_bytes;
 use common::{KeyValue, MapOutput};
@@ -50,7 +50,7 @@ pub fn reduce(
 ) -> Result<Bytes> {
     let mut count = 0u64;
 
-    for mut value in values {
+    for value in values {
         count += String::from_utf8(value.to_vec())?.parse::<u64>()?;
     }
 

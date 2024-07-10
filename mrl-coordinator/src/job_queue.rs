@@ -2,15 +2,14 @@
 // if you wish to change this and refactor it into a struct, feel free to do so.
 // - Appy
 
-use std::io::{Error, ErrorKind};
 use std::sync::Arc;
 
 use anyhow::anyhow;
 use tokio::select;
 use tokio::sync::Mutex;
-use tokio::task::{JoinHandle, JoinSet};
+use tokio::task::JoinSet;
 use tonic::Request;
-use tracing::{debug, info};
+use tracing::info;
 
 use common::minio::{path_to_bucket_key, Client};
 
@@ -356,7 +355,7 @@ async fn handling_stragglers(
             if free_worker_id != straggler_id {
                 let request = {
                     let mut registry_lock = registry.lock().await;
-                    let mut worker = registry_lock.get_worker_mut(free_worker_id).unwrap();
+                    let worker = registry_lock.get_worker_mut(free_worker_id).unwrap();
                     worker.set_state(current_state);
 
                     match current_state {
@@ -397,7 +396,7 @@ async fn handling_stragglers(
 
                 {
                     let mut registry_lock = registry.lock().await;
-                    let mut worker = registry_lock.get_worker_mut(free_worker_id).unwrap();
+                    let worker = registry_lock.get_worker_mut(free_worker_id).unwrap();
                     worker.client.received_work(request).await?;
                 }
 

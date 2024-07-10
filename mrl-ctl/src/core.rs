@@ -10,12 +10,11 @@ pub mod coordinator {
     tonic::include_proto!("coordinator");
 }
 
-const PORT: u16 = 8030;
 const TIMEOUT: u32 = 5;
 
 // Tasks
 pub async fn jobs(address: String) -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = CoordinatorClient::connect(format!("{}", address)).await?;
+    let mut client = CoordinatorClient::connect(address.to_string()).await?;
     let request = tonic::Request::new(JobsRequest {});
     let response = client.jobs(request).await?;
 
@@ -43,7 +42,7 @@ pub async fn submit(
     aux: Vec<String>,
     timeout: Option<u32>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = CoordinatorClient::connect(format!("{}", address)).await?;
+    let mut client = CoordinatorClient::connect(address.to_string()).await?;
     let request = tonic::Request::new(AddJobRequest {
         input_files: input,
         output_files: output,
@@ -51,13 +50,13 @@ pub async fn submit(
         timeout: timeout.unwrap_or(TIMEOUT),
         aux,
     });
-    let response = client.add_job(request).await?;
+    let _ = client.add_job(request).await?;
 
     Ok(())
 }
 
 pub async fn status(address: String) -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = CoordinatorClient::connect(format!("{}", address)).await?;
+    let mut client = CoordinatorClient::connect(address.to_string()).await?;
     let request = tonic::Request::new(StatusRequest {});
     let response = client.status(request).await?;
 

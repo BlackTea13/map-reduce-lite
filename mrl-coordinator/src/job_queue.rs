@@ -169,8 +169,6 @@ async fn process_map_job(
         worker_client.received_work(request).await?;
     }
 
-    // Set all the workers' state.
-    set_job_worker_state(registry.clone(), job, WorkerState::Mapping).await?;
     Ok(())
 }
 

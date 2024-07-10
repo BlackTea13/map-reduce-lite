@@ -81,7 +81,7 @@ async fn _process_job_queue(
     // info!("{}", output_path);
     let temp_path = match output_path.as_str() {
         "" => "temp",
-        _ => &*format!("{}/temp", output_path),
+        _ => &format!("{}/temp", output_path),
     };
 
 

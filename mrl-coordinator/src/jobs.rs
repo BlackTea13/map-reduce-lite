@@ -187,7 +187,7 @@ impl JobQueue {
 
     #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.number_of_jobs_pending() == 0
     }
 
     /// Return the number of jobs which has been processed. (Pointer has passed it.)

@@ -43,13 +43,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::from_conf(minio_client_config);
     let job_queue = coordinator.clone_job_queue();
     let job_queue_notifier = coordinator.clone_job_queue_notifier();
+
     let registry = coordinator.clone_registry();
 
     tokio::task::spawn(async move {
         loop {
-            info!(" - Waiting for job");
             // A job has been pushed.
-            job_queue_notifier.notified().await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+            if (job_queue.lock().await.is_empty()) {
+                continue;
+            }
 
             let result =
                 process_job_queue(client.clone(), job_queue.clone(), registry.clone()).await;

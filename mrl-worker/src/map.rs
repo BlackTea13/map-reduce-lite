@@ -16,10 +16,10 @@ use walkdir::WalkDir;
 use common::minio::Client;
 use common::{ihash, KeyValue};
 
-use crate::core::MapJobRequest;
+use crate::core::{MapJobRequest, WORKING_DIR_MAP};
 use crate::CoordinatorClient;
 
-const WORKING_DIR: &str = "/var/tmp/";
+const WORKING_DIR: &str = "/var/tmp/map/";
 
 type BucketIndex = u32;
 type Buckets = DashMap<BucketIndex, Vec<KeyValue>>;
@@ -80,7 +80,7 @@ pub async fn perform_map(
         }
     };
 
-    let target_dir = format!("{WORKING_DIR}mrl-{}", worker_id & 0xFFFF);
+    let target_dir = format!("{WORKING_DIR_MAP}mrl-{}", worker_id & 0xFFFF);
     let target_path = Path::new(&target_dir);
     if !target_path.exists() {
         fs::create_dir_all(target_path)?;
@@ -125,20 +125,18 @@ pub async fn perform_map(
     }
 
     // cleanup temp files on local
-    tokio::task::spawn(async move {
-        for entry in WalkDir::new(WORKING_DIR) {
-            if let Ok(entry) = entry {
-                if entry.path().is_dir()
-                    && entry
-                        .file_name()
-                        .to_string_lossy()
-                        .starts_with(&format!("mrl-{}", worker_id))
-                {
-                    let _ = fs::remove_dir_all(entry.path());
-                }
+    for entry in WalkDir::new(WORKING_DIR_MAP) {
+        if let Ok(entry) = entry {
+            if entry.path().is_dir()
+                && entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(&format!("mrl-{}", worker_id & 0xFFFF))
+            {
+                let _ = fs::remove_dir_all(entry.path());
             }
         }
-    });
+    }
 
     upload_objects(&bucket_out, &output_key, buckets, &worker_id, client).await?;
 

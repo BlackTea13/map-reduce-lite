@@ -27,7 +27,8 @@ use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceM
 use crate::map;
 use crate::reduce;
 
-const WORKING_DIR: &str = "/var/tmp/";
+pub const WORKING_DIR_MAP: &str = "/var/tmp/map/";
+pub const WORKING_DIR_REDUCE: &str = "/var/tmp/reduce/";
 
 pub mod coordinator {
     tonic::include_proto!("coordinator");
@@ -103,6 +104,8 @@ impl Worker for MRWorker {
                     let result = match work_request.job_message.unwrap() {
                         MapMessage(msg) => {
                             // Test for straggler: map
+                            // info!("Sleeping");
+                            // tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
                             // if id == 1 {
                             //     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
                             // }
@@ -186,7 +189,20 @@ impl Worker for MRWorker {
         // clean up locally cc: @Appy
         //
         tokio::task::spawn(async move {
-            for entry in WalkDir::new(WORKING_DIR) {
+            for entry in WalkDir::new(WORKING_DIR_MAP) {
+                if let Ok(entry) = entry {
+                    if entry.path().is_dir()
+                        && entry
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with(&"mrl".to_string())
+                    {
+                        let _ = fs::remove_dir_all(entry.path());
+                    }
+                }
+            }
+
+            for entry in WalkDir::new(WORKING_DIR_REDUCE) {
                 if let Ok(entry) = entry {
                     if entry.path().is_dir()
                         && entry

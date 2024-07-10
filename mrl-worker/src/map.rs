@@ -52,6 +52,8 @@ pub async fn upload_objects(
     Ok(())
 }
 
+use rand::Rng;
+
 pub async fn perform_map(
     request: MapJobRequest,
     num_workers: u32,
@@ -65,6 +67,13 @@ pub async fn perform_map(
     let aux = request.aux;
     let worker_id: u32 = request.worker_id as u32;
 
+    let r: u8 = {
+        let mut rng = rand::thread_rng();
+        rng.gen()
+    };
+
+
+
     info!("Received map task with workload `{workload}`");
 
     let workload = match workload::try_named(&workload) {
@@ -77,7 +86,7 @@ pub async fn perform_map(
         }
     };
 
-    let target_dir = format!("{WORKING_DIR_MAP}mrl-{}", worker_id & 0xFFFF);
+    let target_dir = format!("{WORKING_DIR_MAP}mrl-{r}-{}", worker_id & 0xFFFF);
     let target_path = Path::new(&target_dir);
     if !target_path.exists() {
         fs::create_dir_all(target_path)?;
@@ -127,7 +136,7 @@ pub async fn perform_map(
             && entry
                 .file_name()
                 .to_string_lossy()
-                .starts_with(&format!("mrl-{}", worker_id & 0xFFFF))
+                .starts_with(&format!("mrl-{r}-{}", worker_id & 0xFFFF))
         {
             let _ = fs::remove_dir_all(entry.path());
         }

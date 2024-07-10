@@ -18,6 +18,7 @@ use walkdir::WalkDir;
 
 use common::minio::Client;
 use common::{ihash, KeyValue};
+use workload::wc::reduce;
 
 use crate::core::worker::ReduceJobRequest;
 use crate::info;
@@ -53,14 +54,60 @@ pub fn external_sort(filename: &str) -> String {
 }
 
 pub async fn perform_reduce(request: ReduceJobRequest, client: &Client) -> Result<(), Error> {
+
+
+    let request_clone = request.clone();
+    let bucket = request_clone.bucket;
+    let output_path = request_clone.output;
+    let reduce_ids = request_clone.reduce_ids;
+    let workload = request_clone.workload;
+
+    info!("Received reduce task with workload `{workload}`");
+
+    for reduce_id in &reduce_ids {
+        perform_reduce_per_id(request.clone(),client, *reduce_id).await?;
+    }
+
+    for reduce_id in reduce_ids.clone() {
+        let _ = tokio::task::spawn(async move {
+            for entry in WalkDir::new(WORKING_DIR) {
+                if let Ok(entry) = entry {
+                    if entry.path().is_dir()
+                        && entry
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with(&format!("mrl-{}", reduce_id))
+                    {
+                        let _ = fs::remove_dir_all(entry.path());
+                    }
+                }
+            }
+        }).await;
+    }
+
+
+
+
+
+
+    Ok(())
+}
+
+pub async fn perform_reduce_per_id(request: ReduceJobRequest, client: &Client, reduce_id: u32) -> Result<(), Error> {
+
     let aux = request.aux;
     let bucket = request.bucket;
     let inputs = request.inputs;
     let output_path = request.output;
-    let reduce_id = request.reduce_id;
     let workload = request.workload;
-    let worker_id = request.worker_id;
-    info!("Received reduce task with workload `{workload}`");
+
+
+    let inputs: Vec<&String> = inputs.iter()
+        .filter(|key| key.contains(&format!("mr-in-{}", reduce_id)))
+        .collect();
+
+
+    info!("working on reduce_id {}", &reduce_id);
 
     let workload = match workload::try_named(&workload) {
         Some(wl) => wl,
@@ -72,15 +119,24 @@ pub async fn perform_reduce(request: ReduceJobRequest, client: &Client) -> Resul
         }
     };
 
-    let target_dir = format!("{WORKING_DIR}mrl-{}", worker_id & 0xFFFF);
+    let target_dir = format!("{WORKING_DIR}mrl-{}", reduce_id & 0xFFFF);
     let target_path = Path::new(&target_dir);
     if !target_path.exists() {
         fs::create_dir_all(target_path)?;
     }
 
-    for key in inputs {
-        client.download_object(&bucket, &key, &target_dir).await?;
+    info!("got here first");
+
+    for key in &inputs {
+        info!("key: {}", key);
+        let res = client.download_object(&bucket, &key, &target_dir).await;
+        match res {
+            Ok(_) => {}
+            Err(e) => info!("error: {}", e)
+        }
     }
+
+    info!("got here");
 
     let reduce_func = workload.reduce_fn;
     let temp_file_path = format!("{target_dir}/*");
@@ -150,35 +206,17 @@ pub async fn perform_reduce(request: ReduceJobRequest, client: &Client) -> Resul
     )?;
     out_file.write_all(&out)?;
 
-    let output_key = format!("{output_path}/mr-out-{}", worker_id & 0xFFFF);
+    let output_key = format!("{output_path}/mr-out-{}", reduce_id & 0xFFFF);
 
     client
         .upload_file(&bucket, &output_key, out_pathspec)
         .await?;
 
     // cleanup temp files on local
-    tokio::task::spawn(async move {
-        for entry in WalkDir::new(WORKING_DIR) {
-            if let Ok(entry) = entry {
-                if entry.path().is_dir()
-                    && entry
-                        .file_name()
-                        .to_string_lossy()
-                        .starts_with(&format!("mrl-{}", reduce_id))
-                {
-                    let _ = fs::remove_dir_all(entry.path());
-                }
-            }
-        }
-    });
 
-    // cleanup temp files in S3
-    let temp_path = match output_path.as_str() {
-        "" => "temp",
-        _ => &format!("{}/temp", output_path),
-    };
 
-    client.delete_path(&bucket, temp_path).await?;
+    //tokio::time::sleep(tokio::time::Duration::from_secs(4)).await;
 
     Ok(())
+
 }

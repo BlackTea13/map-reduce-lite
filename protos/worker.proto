@@ -32,9 +32,8 @@ message ReduceJobRequest {
   string workload = 4;
   repeated string aux = 5;
 
-  uint32 reduce_id = 6;
+  repeated uint32 reduce_ids = 6;
 
-  int32 worker_id = 7;
 }
 
 message ReceivedWorkResponse {

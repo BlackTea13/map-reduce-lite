@@ -47,7 +47,7 @@ pub struct Job {
     worker_map_files: HashMap<WorkerID, Vec<String>>,
 
     /// Hashmap to store the files each worker is reducing on
-    worker_reduce_files: HashMap<WorkerID, (u32, Vec<String>)>,
+    worker_reduce_files: HashMap<WorkerID, (Vec<u32>, Vec<String>)>,
 }
 
 impl Job {
@@ -139,14 +139,18 @@ impl Job {
     pub fn set_worker_reduce_files(
         &mut self,
         worker_id: WorkerID,
-        index: u32,
+        reduce_ids: Vec<u32>,
         files: Vec<String>,
-    ) -> Option<(u32, Vec<String>)> {
-        self.worker_reduce_files.insert(worker_id, (index, files))
+    ) -> Option<(Vec<u32>, Vec<String>)> {
+        self.worker_reduce_files.insert(worker_id, (reduce_ids, files))
     }
 
-    pub fn get_worker_reduce_files(&self, worker_id: &WorkerID) -> Option<&(u32, Vec<String>)> {
+    pub fn get_worker_reduce_files(&self, worker_id: &WorkerID) -> Option<&(Vec<u32>, Vec<String>)> {
         self.worker_reduce_files.get(worker_id)
+    }
+
+    pub fn get_worker_map_file_hashmap(self) -> HashMap<WorkerID, Vec<String>> {
+        self.worker_map_files
     }
 }
 

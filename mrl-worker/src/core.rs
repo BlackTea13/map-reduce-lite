@@ -103,9 +103,11 @@ impl Worker for MRWorker {
                     let result = match work_request.job_message.unwrap() {
                         MapMessage(msg) => {
                             // Test for straggler: map
-                            // if id == 1 {
-                            //     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
-                            // }
+                            // info!("Sleeping");
+                            // tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                            if id == 1 {
+                                tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                            }
                             map::perform_map(msg, work_request.num_workers, &client).await
                         },
                         ReduceMessage(msg) => {

@@ -1,10 +1,7 @@
-use std::io::BufRead;
-
 /// MapReduce application for matrix multiplication.
 /// Composed of two stages.
 use anyhow::{anyhow, Result};
 use bytes::{BufMut, Bytes, BytesMut};
-use clap::builder::TypedValueParser;
 
 use common::{KeyValue, MapOutput};
 
@@ -55,7 +52,7 @@ pub fn map_phase_one(kv: KeyValue, _aux: Bytes) -> MapOutput {
 }
 
 pub fn reduce_phase_one(
-    key: Bytes,
+    _: Bytes,
     values: Box<dyn Iterator<Item = Bytes> + '_>,
     _aux: Bytes,
 ) -> Result<Bytes> {

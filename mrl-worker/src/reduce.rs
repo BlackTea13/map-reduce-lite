@@ -48,8 +48,6 @@ pub fn external_sort(filename: &str) -> String {
 
 pub async fn perform_reduce(request: ReduceJobRequest, client: &Client) -> Result<(), Error> {
     let request_clone = request.clone();
-    let bucket = request_clone.bucket;
-    let output_path = request_clone.output;
     let reduce_ids = request_clone.reduce_ids;
     let workload = request_clone.workload;
 
@@ -61,16 +59,14 @@ pub async fn perform_reduce(request: ReduceJobRequest, client: &Client) -> Resul
 
     for reduce_id in reduce_ids.clone() {
         let _ = tokio::task::spawn(async move {
-            for entry in WalkDir::new(WORKING_DIR_REDUCE) {
-                if let Ok(entry) = entry {
-                    if entry.path().is_dir()
-                        && entry
-                            .file_name()
-                            .to_string_lossy()
-                            .starts_with(&format!("mrl-{}", reduce_id & 0xFFFF))
-                    {
-                        let _ = fs::remove_dir_all(entry.path());
-                    }
+            for entry in WalkDir::new(WORKING_DIR_REDUCE).into_iter().flatten() {
+                if entry.path().is_dir()
+                    && entry
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with(&format!("mrl-{}", reduce_id & 0xFFFF))
+                {
+                    let _ = fs::remove_dir_all(entry.path());
                 }
             }
         })
@@ -115,7 +111,7 @@ pub async fn perform_reduce_per_id(
     }
 
     for key in &inputs {
-        let res = client.download_object(&bucket, &key, &target_dir).await;
+        let res = client.download_object(&bucket, key, &target_dir).await;
         match res {
             Ok(_) => {}
             Err(e) => info!("error: {}", e),
@@ -149,55 +145,53 @@ pub async fn perform_reduce_per_id(
     let mut previous_key = String::new();
     let mut values: Vec<Bytes> = vec![];
 
-    for line in reader.lines() {
-        if let Ok(line) = line {
-            if line.is_empty() {
-                continue;
-            }
+    for line in reader.lines().map_while(Result::ok) {
+        if line.is_empty() {
+            continue;
+        }
 
-            let (key, value) = line.split_once(' ').unwrap();
-            let (key, value) = (key.to_string(), value.to_string());
+        let (key, value) = line.split_once(' ').unwrap();
+        let (key, value) = (key.to_string(), value.to_string());
 
-            if URL_SAFE.decode(&value).is_err() {
-                error!("failed decode value: {}", &value);
-            }
-            if String::from_utf8(URL_SAFE.decode(&value)?).is_err() {
-                error!("failed utf8 value: {}", &value);
-            }
+        if URL_SAFE.decode(&value).is_err() {
+            error!("failed decode value: {}", &value);
+        }
+        if String::from_utf8(URL_SAFE.decode(&value)?).is_err() {
+            error!("failed utf8 value: {}", &value);
+        }
 
-            if URL_SAFE.decode(&key).is_err() {
-                error!("failed decode key: {}", &key);
-            }
-            if String::from_utf8(URL_SAFE.decode(&key)?).is_err() {
-                error!("failed utf8 key: {}", &key);
-            }
+        if URL_SAFE.decode(&key).is_err() {
+            error!("failed decode key: {}", &key);
+        }
+        if String::from_utf8(URL_SAFE.decode(&key)?).is_err() {
+            error!("failed utf8 key: {}", &key);
+        }
 
-            let (key, value) = (
-                String::from_utf8(URL_SAFE.decode(key)?)?,
-                String::from_utf8(URL_SAFE.decode(value)?)?,
-            );
+        let (key, value) = (
+            String::from_utf8(URL_SAFE.decode(key)?)?,
+            String::from_utf8(URL_SAFE.decode(value)?)?,
+        );
 
-            if previous_key == "" {
-                previous_key = key;
-                values.push(Bytes::from(value));
-            } else if previous_key != key {
-                let aux_bytes = Bytes::from(aux.clone().join(" "));
+        if previous_key.is_empty() {
+            previous_key = key;
+            values.push(Bytes::from(value));
+        } else if previous_key != key {
+            let aux_bytes = Bytes::from(aux.clone().join(" "));
 
-                let out = reduce_func(
-                    Bytes::from(previous_key.clone()),
-                    Box::new(values.clone().into_iter()),
-                    aux_bytes,
-                )?;
+            let out = reduce_func(
+                Bytes::from(previous_key.clone()),
+                Box::new(values.clone().into_iter()),
+                aux_bytes,
+            )?;
 
-                out_file.write_all(&out)?;
+            out_file.write_all(&out)?;
 
-                values.clear();
-                values.push(Bytes::from(value));
+            values.clear();
+            values.push(Bytes::from(value));
 
-                previous_key = key;
-            } else {
-                values.push(Bytes::from(value));
-            }
+            previous_key = key;
+        } else {
+            values.push(Bytes::from(value));
         }
     }
 

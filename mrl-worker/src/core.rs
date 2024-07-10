@@ -41,6 +41,8 @@ pub mod worker {
 enum WorkerState {
     #[default]
     Idle,
+
+    #[allow(dead_code)]
     InProgress,
 }
 
@@ -98,7 +100,7 @@ impl Worker for MRWorker {
         tokio::spawn(async move {
             select! {
                 _ = async {
-                    let id = id.lock().await.clone().unwrap();
+                    let id = (*id.lock().await).unwrap();
 
                     let result = match work_request.job_message.unwrap() {
                         MapMessage(msg) => {
@@ -138,11 +140,7 @@ impl Worker for MRWorker {
                     }
                 } => {},
                 _ = interrupt_receiver.recv() => {
-                    let id = id.lock().await.clone().unwrap();
-
-                    let request = Request::new(WorkerDoneRequest {
-                        worker_id: id as i32,
-                    });
+                    let id = (*id.lock().await).unwrap();
 
                     let coordinator_connect = CoordinatorClient::connect(address.clone()).await;
 
@@ -178,7 +176,7 @@ impl Worker for MRWorker {
 
     async fn kill_worker(
         &self,
-        request: Request<KillWorkerRequest>,
+        _: Request<KillWorkerRequest>,
     ) -> Result<Response<KillWorkerResponse>, Status> {
         info!("Kill signal received");
         if self.sender.clone().send(()).await.is_err() {
@@ -188,29 +186,25 @@ impl Worker for MRWorker {
         // clean up locally cc: @Appy
         //
         tokio::task::spawn(async move {
-            for entry in WalkDir::new(WORKING_DIR_MAP) {
-                if let Ok(entry) = entry {
-                    if entry.path().is_dir()
-                        && entry
-                            .file_name()
-                            .to_string_lossy()
-                            .starts_with(&"mrl".to_string())
-                    {
-                        let _ = fs::remove_dir_all(entry.path());
-                    }
+            for entry in WalkDir::new(WORKING_DIR_MAP).into_iter().flatten() {
+                if entry.path().is_dir()
+                    && entry
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with(&"mrl".to_string())
+                {
+                    let _ = fs::remove_dir_all(entry.path());
                 }
             }
 
-            for entry in WalkDir::new(WORKING_DIR_REDUCE) {
-                if let Ok(entry) = entry {
-                    if entry.path().is_dir()
-                        && entry
-                            .file_name()
-                            .to_string_lossy()
-                            .starts_with(&"mrl".to_string())
-                    {
-                        let _ = fs::remove_dir_all(entry.path());
-                    }
+            for entry in WalkDir::new(WORKING_DIR_REDUCE).into_iter().flatten() {
+                if entry.path().is_dir()
+                    && entry
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with(&"mrl".to_string())
+                {
+                    let _ = fs::remove_dir_all(entry.path());
                 }
             }
         });
@@ -221,7 +215,7 @@ impl Worker for MRWorker {
 
     async fn interrupt_worker(
         &self,
-        request: Request<InterruptWorkerRequest>,
+        _: Request<InterruptWorkerRequest>,
     ) -> Result<Response<InterruptWorkerResponse>, Status> {
         info!("Interrupt signal received");
 

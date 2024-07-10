@@ -3,6 +3,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Error};
 use base64::Engine;
+#[allow(unused_imports)]
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use bytes::{BufMut, Bytes, BytesMut};
 use dashmap::DashMap;
@@ -16,8 +17,6 @@ use common::minio::Client;
 use common::{ihash, KeyValue};
 
 use crate::core::{MapJobRequest, WORKING_DIR_MAP};
-
-const WORKING_DIR: &str = "/var/tmp/map/";
 
 type BucketIndex = u32;
 type Buckets = DashMap<BucketIndex, Vec<KeyValue>>;
@@ -123,16 +122,14 @@ pub async fn perform_map(
     }
 
     // cleanup temp files on local
-    for entry in WalkDir::new(WORKING_DIR_MAP) {
-        if let Ok(entry) = entry {
-            if entry.path().is_dir()
-                && entry
-                    .file_name()
-                    .to_string_lossy()
-                    .starts_with(&format!("mrl-{}", worker_id & 0xFFFF))
-            {
-                let _ = fs::remove_dir_all(entry.path());
-            }
+    for entry in WalkDir::new(WORKING_DIR_MAP).into_iter().flatten() {
+        if entry.path().is_dir()
+            && entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(&format!("mrl-{}", worker_id & 0xFFFF))
+        {
+            let _ = fs::remove_dir_all(entry.path());
         }
     }
 

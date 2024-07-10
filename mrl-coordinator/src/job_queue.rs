@@ -534,7 +534,7 @@ async fn straggler_vs_free_worker(
                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             }
 
-            client.move_objects(&bucket_out,&path,dest_path).await?;
+            client.move_objects(&bucket_out,&path,format!("{}/{}", &out_key, &dest_path).as_str()).await?;
 
             Some(straggler_id)
 

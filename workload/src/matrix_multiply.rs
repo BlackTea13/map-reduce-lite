@@ -66,12 +66,12 @@ pub fn reduce_phase_one(
 
     let matrix_a = strings
         .iter()
-        .map(|s| s.split(" ").collect::<Vec<_>>())
+        .map(|s| s.split(' ').collect::<Vec<_>>())
         .filter(|s| s.last().unwrap() == &"A")
         .collect::<Vec<_>>();
     let matrix_b = strings
         .iter()
-        .map(|s| s.split(" ").collect::<Vec<_>>())
+        .map(|s| s.split(' ').collect::<Vec<_>>())
         .filter(|s| s.last().unwrap() == &"B")
         .collect::<Vec<_>>();
 
@@ -103,7 +103,7 @@ pub fn map_phase_two(kv: KeyValue, _aux: Bytes) -> MapOutput {
     let mut value_buf = BytesMut::new();
 
     let iter = lines.into_iter().map(move |line| {
-        let split = line.split(" ").collect::<Vec<_>>();
+        let split = line.split(' ').collect::<Vec<_>>();
 
         key_buf.put_slice(split[0].as_bytes());
         key_buf.put_slice(" ".as_bytes());
@@ -132,9 +132,9 @@ pub fn reduce_phase_two(
     let mut sum: f64 = 0.0;
     for row in rows {
         let string = String::from_utf8(row.to_vec())?;
-        let split = string.split(" ").collect::<Vec<_>>();
+        let split = string.split(' ').collect::<Vec<_>>();
         let value = str::parse::<f64>(split[0])?;
-        sum = sum + value;
+        sum += value;
     }
 
     let mut buffer = BytesMut::new();

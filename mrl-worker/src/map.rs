@@ -87,7 +87,6 @@ pub async fn perform_map(
     }
 
     for key in input_keys {
-        info!("key that alrdy exist, {}" , &key);
         client
             .download_object(&bucket_in, &key, &target_dir)
             .await?;
@@ -138,9 +137,6 @@ pub async fn perform_map(
             }
         }
     }
-
-
-    info!("uploading to minio, {}", &output_key);
 
     upload_objects(&bucket_out, &output_key, buckets, &worker_id, client).await?;
 

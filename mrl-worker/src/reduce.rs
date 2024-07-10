@@ -21,9 +21,9 @@ use common::{ihash, KeyValue};
 use workload::wc::reduce;
 
 use crate::core::worker::ReduceJobRequest;
+use crate::core::WORKING_DIR_REDUCE;
 use crate::info;
 use crate::CoordinatorClient;
-use crate::core::WORKING_DIR_REDUCE;
 
 // use tokio::fs::File;
 // use tokio::io::AsyncReadExt;
@@ -53,7 +53,6 @@ pub fn external_sort(filename: &str) -> String {
 }
 
 pub async fn perform_reduce(request: ReduceJobRequest, client: &Client) -> Result<(), Error> {
-
     let request_clone = request.clone();
     let bucket = request_clone.bucket;
     let output_path = request_clone.output;
@@ -63,7 +62,7 @@ pub async fn perform_reduce(request: ReduceJobRequest, client: &Client) -> Resul
     info!("Received reduce task with workload `{workload}`");
 
     for reduce_id in &reduce_ids {
-        perform_reduce_per_id(request.clone(),client, *reduce_id).await?;
+        perform_reduce_per_id(request.clone(), client, *reduce_id).await?;
     }
 
     for reduce_id in reduce_ids.clone() {
@@ -72,38 +71,36 @@ pub async fn perform_reduce(request: ReduceJobRequest, client: &Client) -> Resul
                 if let Ok(entry) = entry {
                     if entry.path().is_dir()
                         && entry
-                        .file_name()
-                        .to_string_lossy()
-                        .starts_with(&format!("mrl-{}", reduce_id & 0xFFFF))
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with(&format!("mrl-{}", reduce_id & 0xFFFF))
                     {
                         let _ = fs::remove_dir_all(entry.path());
                     }
                 }
             }
-        }).await;
+        })
+        .await;
     }
-
-
-
-
-
 
     Ok(())
 }
 
-pub async fn perform_reduce_per_id(request: ReduceJobRequest, client: &Client, reduce_id: u32) -> Result<(), Error> {
-
+pub async fn perform_reduce_per_id(
+    request: ReduceJobRequest,
+    client: &Client,
+    reduce_id: u32,
+) -> Result<(), Error> {
     let aux = request.aux;
     let bucket = request.bucket;
     let inputs = request.inputs;
     let output_path = request.output;
     let workload = request.workload;
 
-
-    let inputs: Vec<&String> = inputs.iter()
+    let inputs: Vec<&String> = inputs
+        .iter()
         .filter(|key| key.contains(&format!("mr-in-{}", reduce_id)))
         .collect();
-
 
     info!("working on reduce_id {}", &reduce_id);
 
@@ -127,7 +124,7 @@ pub async fn perform_reduce_per_id(request: ReduceJobRequest, client: &Client, r
         let res = client.download_object(&bucket, &key, &target_dir).await;
         match res {
             Ok(_) => {}
-            Err(e) => info!("error: {}", e)
+            Err(e) => info!("error: {}", e),
         }
     }
 
@@ -163,31 +160,27 @@ pub async fn perform_reduce_per_id(request: ReduceJobRequest, client: &Client, r
                 continue;
             }
 
-
             let (key, value) = line.split_once(' ').unwrap();
             let (key, value) = (key.to_string(), value.to_string());
 
-
-
             if URL_SAFE.decode(&value).is_err() {
-                error!("failed decode value: {}",&value);
+                error!("failed decode value: {}", &value);
             }
             if String::from_utf8(URL_SAFE.decode(&value)?).is_err() {
-                error!("failed utf8 value: {}",&value);
+                error!("failed utf8 value: {}", &value);
             }
 
             if URL_SAFE.decode(&key).is_err() {
-                error!("failed decode key: {}",&key);
+                error!("failed decode key: {}", &key);
             }
             if String::from_utf8(URL_SAFE.decode(&key)?).is_err() {
-                error!("failed utf8 key: {}",&key);
+                error!("failed utf8 key: {}", &key);
             }
 
             let (key, value) = (
                 String::from_utf8(URL_SAFE.decode(key)?)?,
                 String::from_utf8(URL_SAFE.decode(value)?)?,
             );
-
 
             if previous_key == "" {
                 previous_key = key;
@@ -229,5 +222,4 @@ pub async fn perform_reduce_per_id(request: ReduceJobRequest, client: &Client, r
         .await?;
 
     Ok(())
-
 }

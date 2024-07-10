@@ -206,17 +206,15 @@ impl Worker for MRWorker {
                 if let Ok(entry) = entry {
                     if entry.path().is_dir()
                         && entry
-                        .file_name()
-                        .to_string_lossy()
-                        .starts_with(&"mrl".to_string())
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with(&"mrl".to_string())
                     {
                         let _ = fs::remove_dir_all(entry.path());
                     }
                 }
             }
         });
-
-
 
         let reply = KillWorkerResponse { success: true };
         Ok(Response::new(reply))

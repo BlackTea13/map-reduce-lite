@@ -346,78 +346,85 @@ async fn handling_stragglers(
             free_workers.first().cloned()
         };
 
+
         if let Some(free_worker_id) = free_worker_id {
-            let request = {
-                let mut registry_lock = registry.lock().await;
-                let mut worker = registry_lock.get_worker_mut(free_worker_id).unwrap();
-                worker.set_state(current_state);
 
-                match current_state {
-                    WorkerState::Mapping => {
-                        let straggler_input =
-                            job_clone.get_worker_map_files(&straggler_id).unwrap();
-                        job.set_worker_map_files(free_worker_id, straggler_input.clone());
-                        create_straggler_request(
-                            job,
-                            current_state,
-                            straggler_id.clone(),
-                            &straggler_input,
-                            None,
-                        )
-                        .await
-                    }
-                    WorkerState::Reducing => {
-                        let (reduce_ids, straggler_input) =
-                            job_clone.get_worker_reduce_files(&straggler_id).unwrap();
-                        job.set_worker_reduce_files(
-                            free_worker_id,
-                            reduce_ids.clone(),
-                            straggler_input.clone(),
-                        );
-                        create_straggler_request(
-                            job,
-                            current_state,
-                            straggler_id.clone(),
-                            &straggler_input,
-                            Some(reduce_ids.clone()),
-                        )
-                        .await
-                    }
-                    // Can't reach this case as the only states that will be passed in the function is Map or Reduce
-                    _ => unreachable!(),
-                }?
-            };
+            if free_worker_id != straggler_id {
 
-            {
-                let mut registry_lock = registry.lock().await;
-                let mut worker = registry_lock.get_worker_mut(free_worker_id).unwrap();
-                worker.client.received_work(request).await?;
-            }
+                let request = {
+                    let mut registry_lock = registry.lock().await;
+                    let mut worker = registry_lock.get_worker_mut(free_worker_id).unwrap();
+                    worker.set_state(current_state);
 
-            let client_clone = client.clone();
-            let registry_clone = registry.clone();
-            let straggler_id_clone = straggler_id.clone();
-            let free_worker_id_clone = free_worker_id.clone();
-            let mut job_clone = job.clone();
+                    match current_state {
+                        WorkerState::Mapping => {
+                            let straggler_input =
+                                job_clone.get_worker_map_files(&straggler_id).unwrap();
+                            job.set_worker_map_files(free_worker_id, straggler_input.clone());
+                            create_straggler_request(
+                                job,
+                                current_state,
+                                straggler_id.clone(),
+                                &straggler_input,
+                                None,
+                            )
+                                .await
+                        }
+                        WorkerState::Reducing => {
+                            let (reduce_ids, straggler_input) =
+                                job_clone.get_worker_reduce_files(&straggler_id).unwrap();
+                            job.set_worker_reduce_files(
+                                free_worker_id,
+                                reduce_ids.clone(),
+                                straggler_input.clone(),
+                            );
+                            create_straggler_request(
+                                job,
+                                current_state,
+                                straggler_id.clone(),
+                                &straggler_input,
+                                Some(reduce_ids.clone()),
+                            )
+                                .await
+                        }
+                        // Can't reach this case as the only states that will be passed in the function is Map or Reduce
+                        _ => unreachable!(),
+                    }?
+                };
 
-            info!(
+                {
+                    let mut registry_lock = registry.lock().await;
+                    let mut worker = registry_lock.get_worker_mut(free_worker_id).unwrap();
+                    worker.client.received_work(request).await?;
+                }
+
+                let client_clone = client.clone();
+                let registry_clone = registry.clone();
+                let straggler_id_clone = straggler_id.clone();
+                let free_worker_id_clone = free_worker_id.clone();
+                let mut job_clone = job.clone();
+
+                info!(
                 "Commencing a race between free {} and straggler {}",
                 free_worker_id_clone, straggler_id_clone
             );
 
-            set.spawn(async move {
-                straggler_vs_free_worker(
-                    &client_clone,
-                    straggler_id_clone,
-                    free_worker_id_clone,
-                    registry_clone,
-                    &mut job_clone,
-                    current_state,
-                )
-                .await
-            });
+                set.spawn(async move {
+                    straggler_vs_free_worker(
+                        &client_clone,
+                        straggler_id_clone,
+                        free_worker_id_clone,
+                        registry_clone,
+                        &mut job_clone,
+                        current_state,
+                    )
+                        .await
+                });
+
+            }
 
             index += 1;
+
         } else {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }

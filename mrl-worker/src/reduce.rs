@@ -23,11 +23,10 @@ use workload::wc::reduce;
 use crate::core::worker::ReduceJobRequest;
 use crate::info;
 use crate::CoordinatorClient;
+use crate::core::WORKING_DIR_REDUCE;
 
 // use tokio::fs::File;
 // use tokio::io::AsyncReadExt;
-
-const WORKING_DIR: &str = "/var/tmp/";
 
 pub fn external_sort(filename: &str) -> String {
     let input_reader = io::BufReader::new(fs::File::open(filename).unwrap());
@@ -55,6 +54,8 @@ pub fn external_sort(filename: &str) -> String {
 
 pub async fn perform_reduce(request: ReduceJobRequest, client: &Client) -> Result<(), Error> {
 
+    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+
 
     let request_clone = request.clone();
     let bucket = request_clone.bucket;
@@ -70,7 +71,7 @@ pub async fn perform_reduce(request: ReduceJobRequest, client: &Client) -> Resul
 
     for reduce_id in reduce_ids.clone() {
         let _ = tokio::task::spawn(async move {
-            for entry in WalkDir::new(WORKING_DIR) {
+            for entry in WalkDir::new(WORKING_DIR_REDUCE) {
                 if let Ok(entry) = entry {
                     if entry.path().is_dir()
                         && entry
@@ -107,6 +108,8 @@ pub async fn perform_reduce_per_id(request: ReduceJobRequest, client: &Client, r
         .collect();
 
 
+    dbg!(&inputs);
+
     info!("working on reduce_id {}", &reduce_id);
 
     let workload = match workload::try_named(&workload) {
@@ -119,7 +122,7 @@ pub async fn perform_reduce_per_id(request: ReduceJobRequest, client: &Client, r
         }
     };
 
-    let target_dir = format!("{WORKING_DIR}mrl-{}", reduce_id & 0xFFFF);
+    let target_dir = format!("{WORKING_DIR_REDUCE}mrl-{}", reduce_id);
     let target_path = Path::new(&target_dir);
     if !target_path.exists() {
         fs::create_dir_all(target_path)?;
@@ -166,12 +169,46 @@ pub async fn perform_reduce_per_id(request: ReduceJobRequest, client: &Client, r
     let mut values: Vec<Bytes> = vec![];
     for line in reader.lines() {
         if let Ok(line) = line {
+            if line.is_empty() {
+                continue;
+            }
+
+            info!("robert-1");
+
             let (key, value) = line.split_once(' ').unwrap();
             let (key, value) = (key.to_string(), value.to_string());
+
+
+
+            if URL_SAFE.decode(&value).is_err() {
+                info!("failed decode value: {}",&value);
+            }
+            if String::from_utf8(URL_SAFE.decode(&value)?).is_err() {
+                info!("failed utf8 value: {}",&value);
+            }
+
+            if URL_SAFE.decode(&key).is_err() {
+                info!("failed decode key: {}",&key);
+            }
+            if String::from_utf8(URL_SAFE.decode(&key)?).is_err() {
+                info!("failed utf8 key: {}",&key);
+            }
+
+
+
+            info!("robert0");
+
             let (key, value) = (
                 String::from_utf8(URL_SAFE.decode(key)?)?,
                 String::from_utf8(URL_SAFE.decode(value)?)?,
             );
+
+
+            info!("robert1");
+
+
+
+
 
             if previous_key == "" {
                 previous_key = key;
@@ -206,11 +243,17 @@ pub async fn perform_reduce_per_id(request: ReduceJobRequest, client: &Client, r
     )?;
     out_file.write_all(&out)?;
 
-    let output_key = format!("{output_path}/mr-out-{}", reduce_id & 0xFFFF);
+    info!("robert4");
+
+    let output_key = format!("{output_path}/mr-out-{}", reduce_id);
+
+    info!("robert5");
 
     client
         .upload_file(&bucket, &output_key, out_pathspec)
         .await?;
+
+    info!("robert6");
 
     // cleanup temp files on local
 

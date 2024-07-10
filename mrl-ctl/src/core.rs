@@ -1,5 +1,5 @@
-use crate::core::coordinator::coordinator_client::CoordinatorClient;
 use crate::core::coordinator::AddJobRequest;
+use crate::core::coordinator::coordinator_client::CoordinatorClient;
 use crate::core::coordinator::JobsRequest;
 //
 // Import gRPC stubs/definitions.

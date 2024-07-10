@@ -11,18 +11,18 @@ use tokio::task::JoinSet;
 use tonic::Request;
 use tracing::info;
 
-use common::minio::{path_to_bucket_key, Client};
+use common::minio::{Client, path_to_bucket_key};
 
-use crate::core::worker::{received_work_request::JobMessage, ReduceJobRequest};
-use crate::core::worker::{InterruptWorkerRequest, KillWorkerRequest, MapJobRequest};
-use crate::core::ReceivedWorkRequest;
-use crate::jobs::JobState;
-use crate::worker_info::WorkerID;
 use crate::{
     jobs::{Job, JobQueue},
     worker_info::WorkerState,
     worker_registry::WorkerRegistry,
 };
+use crate::core::ReceivedWorkRequest;
+use crate::core::worker::{received_work_request::JobMessage, ReduceJobRequest};
+use crate::core::worker::{InterruptWorkerRequest, KillWorkerRequest, MapJobRequest};
+use crate::jobs::JobState;
+use crate::worker_info::WorkerID;
 
 pub async fn process_job_queue(
     client: Client,
@@ -121,8 +121,6 @@ async fn process_map_job(
     job: &mut Job,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Set all the workers' state.
-    set_job_worker_state(registry.clone(), job, WorkerState::Mapping).await?;
-
     let input_path = job.get_input_path().clone();
     let output_path = job.get_output_path().clone();
     info!("Input path for map {}", input_path);

@@ -1,12 +1,15 @@
 use clap::Parser;
-use tokio::signal;
+use tokio::{fs, signal};
 use tokio::sync::mpsc;
 use tonic::transport::Server;
 use tracing::{error, info};
+use walkdir::WalkDir;
 
 use args::Args;
 use common::minio::ClientConfig;
 use core::{CoordinatorClient, MRWorker, WorkerJoinRequest, WorkerLeaveRequest, WorkerServer};
+
+use crate::core::{WORKING_DIR_MAP, WORKING_DIR_REDUCE};
 
 mod core;
 
@@ -27,6 +30,14 @@ async fn start_server(
         info!("Worker server listening on {}", addr);
 
         let worker = MRWorker::new(address, client_config, sender);
+
+        for entry in WalkDir::new(WORKING_DIR_MAP).into_iter().flatten() {
+            let _ = tokio::fs::remove_dir_all(entry.path()).await;
+        }
+
+        for entry in WalkDir::new(WORKING_DIR_REDUCE).into_iter().flatten() {
+            let _ = tokio::fs::remove_dir_all(entry.path()).await;
+        }
 
         let svc = WorkerServer::new(worker);
 

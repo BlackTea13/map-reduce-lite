@@ -15,11 +15,11 @@ use common::minio::{Client, ClientConfig};
 pub use coordinator::{
     coordinator_client::CoordinatorClient, WorkerJoinRequest, WorkerLeaveRequest,
 };
-pub use worker::worker_server::{Worker, WorkerServer};
 pub use worker::{
     AckRequest, AckResponse, InterruptWorkerRequest, InterruptWorkerResponse, KillWorkerRequest,
     KillWorkerResponse, MapJobRequest, ReceivedWorkRequest, ReceivedWorkResponse,
 };
+pub use worker::worker_server::{Worker, WorkerServer};
 
 use crate::core::coordinator::WorkerDoneRequest;
 use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceMessage};

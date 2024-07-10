@@ -132,7 +132,7 @@ pub async fn perform_map(
                 && entry
                     .file_name()
                     .to_string_lossy()
-                    .starts_with(&format!("mrl-{}", worker_id))
+                    .starts_with(&format!("mrl-{}", worker_id & 0xFFFF))
             {
                 let _ = fs::remove_dir_all(entry.path());
             }

@@ -25,7 +25,6 @@ ext-sort = "0.1.4"
 bytesize = "1.3.0"
 base64 = "0.22.1"
 rand = "0.8.5"
-fasthash = "0.4.0"
 
 
 [build-dependencies]

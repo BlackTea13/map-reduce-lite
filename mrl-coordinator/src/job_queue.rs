@@ -131,6 +131,8 @@ async fn process_map_job(
     let output = path_to_bucket_key(&output_path)?;
     let (bucket_out, path_out) = (output.bucket, output.key);
 
+    set_job_worker_state(registry.clone(), job, WorkerState::Mapping).await?;
+
     let input_files = client.list_objects_in_dir(&bucket_in, &key_in).await?;
 
     let job_clone = job.clone();

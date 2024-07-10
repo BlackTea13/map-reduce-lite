@@ -127,7 +127,7 @@ pub fn ihash(key: &[u8]) -> u32 {
 
 const SEED: i64 = 1234;
 pub fn hash(key: &[u8]) -> u32 {
-    gxhash::gxhash32(&key, SEED)
+    fasthash::metro::hash64(key) as u32
 }
 
 /////////////////////////////////////////////////////////////////

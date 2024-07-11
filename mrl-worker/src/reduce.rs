@@ -48,7 +48,7 @@ pub fn external_sort(filename: &str) -> String {
 
 use rand::Rng;
 
-pub async fn perform_reduce(request: ReduceJobRequest, client: &Client) -> Result<(), Error> {
+pub async fn perform_reduce(request: ReduceJobRequest, client: &Client, id: u32) -> Result<(), Error> {
     let request_clone = request.clone();
     let reduce_ids = request_clone.reduce_ids;
     let workload = request_clone.workload;
@@ -60,7 +60,7 @@ pub async fn perform_reduce(request: ReduceJobRequest, client: &Client) -> Resul
             let mut rng = rand::thread_rng();
             rng.gen()
         };
-        perform_reduce_per_id(request.clone(), client, *reduce_id, r).await?;
+        perform_reduce_per_id(request.clone(), client, *reduce_id, r, id).await?;
     }
 
     for reduce_id in reduce_ids.clone() {
@@ -70,7 +70,7 @@ pub async fn perform_reduce(request: ReduceJobRequest, client: &Client) -> Resul
                     && entry
                         .file_name()
                         .to_string_lossy()
-                        .starts_with(&"mrl".to_string())
+                        .starts_with(&format!("mrl-{}", id & 0xFFFF))
                 {
                     let _ = fs::remove_dir_all(entry.path());
                 }
@@ -86,7 +86,8 @@ pub async fn perform_reduce_per_id(
     request: ReduceJobRequest,
     client: &Client,
     reduce_id: u32,
-    rand: u8
+    rand: u8,
+    id: u32
 ) -> Result<(), Error> {
     let aux = request.aux;
     let bucket = request.bucket;
@@ -111,7 +112,7 @@ pub async fn perform_reduce_per_id(
         }
     };
 
-    let target_dir = format!("{WORKING_DIR_REDUCE}mrl-{rand}-{}", reduce_id);
+    let target_dir = format!("{WORKING_DIR_REDUCE}mrl-{}-{}-{rand}", id & 0xFFFF, reduce_id);
     let target_path = Path::new(&target_dir);
     if !target_path.exists() {
         fs::create_dir_all(target_path)?;

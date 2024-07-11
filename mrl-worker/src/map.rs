@@ -73,7 +73,6 @@ pub async fn perform_map(
     };
 
 
-
     info!("Received map task with workload `{workload}`");
 
     let workload = match workload::try_named(&workload) {
@@ -86,7 +85,7 @@ pub async fn perform_map(
         }
     };
 
-    let target_dir = format!("{WORKING_DIR_MAP}mrl-{r}-{}", worker_id & 0xFFFF);
+    let target_dir = format!("{WORKING_DIR_MAP}mrl-{}-{r}", worker_id & 0xFFFF);
     let target_path = Path::new(&target_dir);
     if !target_path.exists() {
         fs::create_dir_all(target_path)?;
@@ -136,7 +135,7 @@ pub async fn perform_map(
             && entry
                 .file_name()
                 .to_string_lossy()
-                .starts_with(&format!("mrl-{r}-{}", worker_id & 0xFFFF))
+                .starts_with(&format!("mrl-{}-{r}", worker_id & 0xFFFF))
         {
             let _ = fs::remove_dir_all(entry.path());
         }

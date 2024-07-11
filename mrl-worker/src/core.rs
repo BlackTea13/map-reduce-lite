@@ -106,10 +106,11 @@ impl Worker for MRWorker {
                         MapMessage(msg) => {
                             // Test for straggler: map
                             // info!("Sleeping");
-                            // tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
-                            // if id == 1 {
+                            //tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                            // if id & 0xFFFF == 2 {
                             //     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
                             // }
+
                             map::perform_map(msg, work_request.num_workers, &client).await
                         },
                         ReduceMessage(msg) => {
@@ -117,7 +118,7 @@ impl Worker for MRWorker {
                             // if id == 1 {
                             //     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
                             // }
-                            reduce::perform_reduce(msg, &client).await
+                            reduce::perform_reduce(msg, &client, id).await
                         },
                     };
 
@@ -182,6 +183,8 @@ impl Worker for MRWorker {
         if self.sender.clone().send(()).await.is_err() {
             return Err(Status::internal("Failed to send shutdown signal"));
         }
+        let id = self.id.clone();
+        let id = (*id.lock().await).unwrap() & 0xFFFF;
 
         // clean up locally cc: @Appy
         //
@@ -191,7 +194,7 @@ impl Worker for MRWorker {
                     && entry
                         .file_name()
                         .to_string_lossy()
-                        .starts_with(&"mrl".to_string())
+                        .starts_with(&format!("mrl-{}", id))
                 {
                     let _ = fs::remove_dir_all(entry.path());
                 }
@@ -202,7 +205,7 @@ impl Worker for MRWorker {
                     && entry
                         .file_name()
                         .to_string_lossy()
-                        .starts_with(&"mrl".to_string())
+                        .starts_with(&format!("mrl-{}", id))
                 {
                     let _ = fs::remove_dir_all(entry.path());
                 }

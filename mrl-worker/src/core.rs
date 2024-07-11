@@ -15,11 +15,11 @@ use common::minio::{Client, ClientConfig};
 pub use coordinator::{
     coordinator_client::CoordinatorClient, WorkerJoinRequest, WorkerLeaveRequest,
 };
+pub use worker::worker_server::{Worker, WorkerServer};
 pub use worker::{
     AckRequest, AckResponse, InterruptWorkerRequest, InterruptWorkerResponse, KillWorkerRequest,
     KillWorkerResponse, MapJobRequest, ReceivedWorkRequest, ReceivedWorkResponse,
 };
-pub use worker::worker_server::{Worker, WorkerServer};
 
 use crate::core::coordinator::WorkerDoneRequest;
 use crate::core::worker::received_work_request::JobMessage::{MapMessage, ReduceMessage};
@@ -101,7 +101,6 @@ impl Worker for MRWorker {
             select! {
                 _ = async {
                     let id = (*id.lock().await).unwrap();
-
                     let result = match work_request.job_message.unwrap() {
                         MapMessage(msg) => {
                             // Test for straggler: map
@@ -122,15 +121,17 @@ impl Worker for MRWorker {
                         },
                     };
 
-                    if let Err(e) = result {
-                        error!("{}", anyhow!(e));
-                    }
-
                     let coordinator_connect = CoordinatorClient::connect(address.clone()).await;
 
                     if let Ok(mut client) = coordinator_connect {
+                        let success = match result {
+                            Ok(_) => true,
+                            Err(_) => false,
+                        }
+
                         let request = Request::new(WorkerDoneRequest {
                             worker_id: id as i32,
+                            success
                         });
 
                         if client.worker_done(request).await.is_err() {
@@ -148,6 +149,7 @@ impl Worker for MRWorker {
                     if let Ok(mut client) = coordinator_connect {
                         let request = Request::new(WorkerDoneRequest {
                             worker_id: id as i32,
+                            success: true
                         });
 
                         if client.worker_done(request).await.is_err() {

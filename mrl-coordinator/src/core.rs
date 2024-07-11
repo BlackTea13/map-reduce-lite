@@ -237,12 +237,16 @@ impl Coordinator for MRCoordinator {
     ) -> Result<Response<WorkerDoneResponse>, Status> {
         let worker_done_request = request.into_inner();
         let worker_id = worker_done_request.worker_id;
+        let success = worker_done_request.success;
 
         info!("Worker done (ID={})", Worker::get_worker_index(worker_id));
 
         let mut registry = self.get_registry().await;
         if let Some(worker) = registry.get_worker_mut(worker_id) {
-            worker.set_state(WorkerState::Free)
+            match success {
+                true => worker.set_state(WorkerState::Free),
+                false => worker.set_state(WorkerState::Error),
+            }
         }
 
         let reply = WorkerDoneResponse { success: true };

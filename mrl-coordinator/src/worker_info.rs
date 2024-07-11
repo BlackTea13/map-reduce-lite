@@ -107,6 +107,7 @@ pub enum WorkerState {
     Free,
     Mapping,
     Reducing,
+    Error
 }
 
 impl WorkerState {

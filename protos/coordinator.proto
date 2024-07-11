@@ -52,11 +52,13 @@ message AddJobResponse {
 
 message WorkerDoneRequest {
   int32 worker_id = 1;
+  
+  // True if work completed successfully
+  // False if error was encountered
+  bool success = 2;
 }
 
 message WorkerDoneResponse {
-  // True if worker completed work successfully
-  // False if worker encounters an error
   bool success = 1;
 }
 

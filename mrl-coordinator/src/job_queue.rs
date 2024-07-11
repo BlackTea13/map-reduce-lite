@@ -356,7 +356,7 @@ async fn monitor_workers(
             Ok(res?)
         },
         _ = tokio::time::sleep(tokio::time::Duration::from_secs(timeout as u64)) => {
-            info!("Stragglers detected...");
+            info!("Job is straggling... attempting to reschedule job");
             Ok(handling_stragglers(client,registry.clone(), job, current_state, timeout).await?)
         }
     }

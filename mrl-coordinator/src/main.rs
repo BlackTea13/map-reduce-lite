@@ -1,5 +1,4 @@
 use clap::Parser;
-use tokio::signal;
 use tonic::transport::Server;
 use tracing::info;
 
@@ -88,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     let _ = shut_down_sender.send(());
                 }
-                Err(err) => {
+                Err(_err) => {
                     // Err(format!("Unable to listen for shutdown signal: {}", err).into())
                 }
             },

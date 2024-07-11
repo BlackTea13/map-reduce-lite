@@ -127,11 +127,11 @@ impl Worker for MRWorker {
                         let success = match result {
                             Ok(_) => true,
                             Err(_) => false,
-                        }
+                        };
 
                         let request = Request::new(WorkerDoneRequest {
                             worker_id: id as i32,
-                            success
+                            success,
                         });
 
                         if client.worker_done(request).await.is_err() {
@@ -149,7 +149,7 @@ impl Worker for MRWorker {
                     if let Ok(mut client) = coordinator_connect {
                         let request = Request::new(WorkerDoneRequest {
                             worker_id: id as i32,
-                            success: true
+                            success: false
                         });
 
                         if client.worker_done(request).await.is_err() {

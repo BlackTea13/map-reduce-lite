@@ -3,7 +3,7 @@
 // - Appy
 
 use std::sync::Arc;
-
+use std::time::Duration;
 use anyhow::anyhow;
 use tokio::select;
 use tokio::sync::Mutex;
@@ -51,7 +51,7 @@ async fn _process_job_queue(
     //       phases, we have to clear job worker list and call this
     //       again. We can't just call this again because we might
     //       add duplicates into the job's worker ID list.
-    assign_workers_to_job(registry.clone(), &client, job).await?;
+    assign_workers_to_job(registry.clone(), &client, job, job_queue.clone()).await?;
 
     // Handle the job in stages.
     let output_path = job.get_output_path().clone();
@@ -70,6 +70,7 @@ async fn _process_job_queue(
     {
         update_job_state(job_queue.clone(), JobState::Failed).await;
         interrupt_all_workers(registry.clone(), job).await;
+        set_job_worker_state(registry.clone(), job, WorkerState::Free).await?;
         client.delete_path(&bucket_out, &output_path).await?;
         return Ok(());
     } else {
@@ -88,6 +89,7 @@ async fn _process_job_queue(
     {
         update_job_state(job_queue.clone(), JobState::Failed).await;
         interrupt_all_workers(registry.clone(), job).await;
+        set_job_worker_state(registry.clone(), job, WorkerState::Free).await?;
         client.delete_path(&bucket_out, &output_path).await?;
     } else {
         info!("Monitoring for reducing done");
@@ -126,6 +128,7 @@ async fn assign_workers_to_job(
     registry: Arc<Mutex<WorkerRegistry>>,
     client: &Client,
     job: &mut Job,
+    job_queue: Arc<Mutex<JobQueue>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let input_path = job.get_input_path();
     let bucket_key = path_to_bucket_key(input_path)?;
@@ -135,6 +138,7 @@ async fn assign_workers_to_job(
     let workers = { registry.lock().await.get_n_free_workers(num_workers_needed) };
 
     if workers.is_empty() {
+        update_job_state(job_queue.clone(), JobState::Failed).await;
         return Err("Failed to assign workers - None available".into());
     }
 
@@ -322,10 +326,29 @@ async fn monitor_workers(
             info!("All workers are free, proceed to next stage");
             Ok(())
         },
+        res = encountered_error(registry.clone(), job) => {
+            info!("A worker encountered an error, canceling job");
+            Ok(res?)
+        },
         _ = tokio::time::sleep(tokio::time::Duration::from_secs(timeout as u64)) => {
             info!("Stragglers detected...");
             Ok(handling_stragglers(client,registry.clone(), job, current_state, timeout).await?)
         }
+    }
+}
+
+async fn encountered_error(registry: Arc<Mutex<WorkerRegistry>>, job: &Job) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let workers = job.get_workers().clone();
+
+    loop {
+        for &worker_id in workers.iter() {
+            let worker_state = registry.lock().await.get_worker_state(worker_id);
+            if let Some(WorkerState::Error) = worker_state {
+                return Err(Box::from(anyhow!("Worker encountered an error")));
+            }
+        }
+
+        tokio::time::sleep(Duration::from_millis(500)).await;
     }
 }
 
@@ -622,25 +645,25 @@ async fn wait_for_worker_to_become_free(registry: Arc<Mutex<WorkerRegistry>>, wo
 /// Wait until all the workers are free
 async fn wait_workers_free(
     registry: Arc<Mutex<WorkerRegistry>>,
-    job: &mut Job,
+    job: &Job,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut workers = job.get_workers().clone();
-    let mut workers_working = job.get_workers().len();
-
-    while workers_working > 0 {
-        for worker_id in workers.iter_mut() {
-            if *worker_id != -1 {
-                let registry = registry.lock().await;
-                if matches!(
-                    registry.get_worker_state(*worker_id),
-                    Some(WorkerState::Free)
-                ) {
-                    *worker_id = -1;
-                    workers_working -= 1;
-                }
+    let workers = job.get_workers().clone();
+    
+    loop {
+        let mut all_free = true;
+        
+        for &worker_id in workers.iter() {
+            let registry = registry.lock().await;
+            if let Some(WorkerState::Free) = registry.get_worker_state(worker_id) {
+                continue
+            }
+            else {
+                all_free = false;
             }
         }
+        
+        if all_free {
+            return Ok(())
+        }
     }
-
-    Ok(())
 }

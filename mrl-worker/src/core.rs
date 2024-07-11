@@ -1,7 +1,6 @@
 use std::fs;
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use tokio::select;
 use tokio::sync::{mpsc, Mutex};
 use tonic::{Request, Response, Status};

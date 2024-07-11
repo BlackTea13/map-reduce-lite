@@ -14,7 +14,7 @@ use tracing::{error, info};
 use walkdir::WalkDir;
 
 use common::minio::Client;
-use common::{hash, ihash, KeyValue};
+use common::{hash, KeyValue};
 
 use crate::core::{MapJobRequest, WORKING_DIR_MAP};
 
@@ -96,10 +96,13 @@ pub async fn perform_map(
             .await?;
     }
 
+    info!("Objects downloaded from object storage");
+
     let map_fn = workload.map_fn;
     let temp_file_path = format!("{target_dir}/*");
     let input_files = glob(&temp_file_path)?;
 
+    info!("Creating buckets...");
     let buckets: Buckets = Buckets::new();
     for pathspec in input_files.flatten() {
         let mut buf = Vec::new();
@@ -127,7 +130,8 @@ pub async fn perform_map(
                 .push(KeyValue { key, value });
         }
     }
-
+    info!("Map function completed on buckets");
+    info!("Cleaning up files on local filesystem...");
     // cleanup temp files on local
     for entry in WalkDir::new(WORKING_DIR_MAP).into_iter().flatten() {
         if entry.path().is_dir()
@@ -140,7 +144,9 @@ pub async fn perform_map(
         }
     }
 
+    info!("Uploading buckets to object storage...");
     upload_objects(&bucket_out, &output_key, buckets, &worker_id, client).await?;
+    info!("Upload complete");
 
     Ok(())
 }

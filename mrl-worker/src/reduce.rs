@@ -64,10 +64,12 @@ pub async fn perform_reduce(
             let mut rng = rand::thread_rng();
             rng.gen()
         };
+
+        info!("Starting reduce on reduce id: {reduce_id}");
         perform_reduce_per_id(request.clone(), client, *reduce_id, r, id).await?;
     }
 
-    for reduce_id in reduce_ids.clone() {
+    for _reduce_id in reduce_ids.clone() {
         let _ = tokio::task::spawn(async move {
             for entry in WalkDir::new(WORKING_DIR_REDUCE).into_iter().flatten() {
                 if entry.path().is_dir()
@@ -104,8 +106,6 @@ pub async fn perform_reduce_per_id(
         .filter(|key| key.contains(&format!("mr-in-{}", reduce_id)))
         .collect();
 
-    info!("working on reduce_id {}", &reduce_id);
-
     let workload = match workload::try_named(&workload) {
         Some(wl) => wl,
         None => {
@@ -126,6 +126,7 @@ pub async fn perform_reduce_per_id(
         fs::create_dir_all(target_path)?;
     }
 
+    info!("Downloading intermediate objects from object storage...");
     for key in &inputs {
         let res = client.download_object(&bucket, key, &target_dir).await;
         match res {
@@ -143,6 +144,7 @@ pub async fn perform_reduce_per_id(
         .map(|file| file.to_str().unwrap().to_string())
         .collect();
 
+    info!("Combining intermediate objects...");
     let combined_output_location = format!("{target_dir}/combined");
     let mut output = File::create(&combined_output_location)?;
     for input_file_name in input_file_names {
@@ -150,6 +152,7 @@ pub async fn perform_reduce_per_id(
         io::copy(&mut input, &mut output)?;
     }
 
+    info!("Running external sort on combined keys");
     let sorted_output_location = external_sort(&combined_output_location);
 
     let out_pathspec = format!("{target_dir}/part");
@@ -161,6 +164,7 @@ pub async fn perform_reduce_per_id(
     let mut previous_key = String::new();
     let mut values: Vec<Bytes> = vec![];
 
+    info!("Grouping keys...");
     for line in reader.lines().map_while(Result::ok) {
         if line.is_empty() {
             continue;
@@ -210,21 +214,27 @@ pub async fn perform_reduce_per_id(
             values.push(Bytes::from(value));
         }
     }
+    info!("Grouping keys completed");
 
     // write the last group to the output
+    info!("Running reduce function on groups...");
     let aux_bytes = Bytes::from(aux.clone().join(" "));
     let out = reduce_func(
         Bytes::from(previous_key.clone()),
         Box::new(values.clone().into_iter()),
         aux_bytes,
     )?;
+
+    info!("Writing output to file...");
     out_file.write_all(&out)?;
 
     let output_key = format!("{output_path}/mr-out-{}", reduce_id);
 
+    info!("Uploading file to object storage...");
     client
         .upload_file(&bucket, &output_key, out_pathspec)
         .await?;
+    info!("Upload complete");
 
     Ok(())
 }

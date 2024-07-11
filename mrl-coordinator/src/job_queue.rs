@@ -2,9 +2,9 @@
 // if you wish to change this and refactor it into a struct, feel free to do so.
 // - Appy
 
+use anyhow::anyhow;
 use std::sync::Arc;
 use std::time::Duration;
-use anyhow::anyhow;
 use tokio::select;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -337,7 +337,10 @@ async fn monitor_workers(
     }
 }
 
-async fn encountered_error(registry: Arc<Mutex<WorkerRegistry>>, job: &Job) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn encountered_error(
+    registry: Arc<Mutex<WorkerRegistry>>,
+    job: &Job,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let workers = job.get_workers().clone();
 
     loop {
@@ -648,22 +651,21 @@ async fn wait_workers_free(
     job: &Job,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let workers = job.get_workers().clone();
-    
+
     loop {
         let mut all_free = true;
-        
+
         for &worker_id in workers.iter() {
             let registry = registry.lock().await;
             if let Some(WorkerState::Free) = registry.get_worker_state(worker_id) {
-                continue
-            }
-            else {
+                continue;
+            } else {
                 all_free = false;
             }
         }
-        
+
         if all_free {
-            return Ok(())
+            return Ok(());
         }
     }
 }

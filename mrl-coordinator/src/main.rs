@@ -1,11 +1,14 @@
 use clap::Parser;
+use tokio::signal;
 use tonic::transport::Server;
 use tracing::info;
 
+use crate::core::worker::KillWorkerRequest;
 use args::Args;
 use common::minio::{self, Client};
 use core::{CoordinatorServer, MRCoordinator};
 use job_queue::process_job_queue;
+use tonic::Request;
 
 mod args;
 
@@ -43,21 +46,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::from_conf(minio_client_config);
 
     let job_queue = coordinator.clone_job_queue();
-    let job_queue_notifier = coordinator.clone_job_queue_notifier();
 
-    let registry = coordinator.clone_registry();
+    let job_queue_registry = coordinator.clone_registry();
+    let shut_down_registry = coordinator.clone_registry();
 
     tokio::task::spawn(async move {
         loop {
             // A job has been pushed.
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-            if (job_queue.lock().await.is_empty()) {
+            if job_queue.lock().await.is_empty() {
                 continue;
             }
 
-            let result =
-                process_job_queue(client.clone(), job_queue.clone(), registry.clone()).await;
+            let result = process_job_queue(
+                client.clone(),
+                job_queue.clone(),
+                job_queue_registry.clone(),
+            )
+            .await;
 
             match result {
                 Ok(_) => info!(" - Task handled"),
@@ -66,10 +73,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    Server::builder()
+    let (shut_down_sender, shut_down_receiver) = tokio::sync::oneshot::channel::<()>();
+
+    tokio::task::spawn(async move {
+        tokio::select! {
+            result = tokio::signal::ctrl_c() => match result {
+                Ok(()) => {
+                    let worker_registry = shut_down_registry.lock().await;
+                    let workers = worker_registry.get_workers();
+                    for worker in workers {
+                        let request = Request::new(KillWorkerRequest {});
+                        let mut worker_client = worker.client.clone();
+                        let _ = worker_client.kill_worker(request).await;
+                    }
+                    let _ = shut_down_sender.send(());
+                }
+                Err(err) => {
+                    // Err(format!("Unable to listen for shutdown signal: {}", err).into())
+                }
+            },
+        }
+    });
+
+    let run_server = Server::builder()
         .add_service(CoordinatorServer::new(coordinator))
-        .serve(addr)
-        .await?;
+        .serve_with_shutdown(addr, async {
+            shut_down_receiver.await.ok();
+        });
+
+    run_server.await?;
 
     Ok(())
 }

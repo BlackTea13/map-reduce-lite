@@ -131,9 +131,8 @@ fn calculate_hash<T: Hash + ?Sized>(t: &T) -> u64 {
     s.finish()
 }
 
-const SEED: i64 = 1234;
 pub fn hash(key: &[u8]) -> u32 {
-   calculate_hash(key) as u32
+    calculate_hash(key) as u32
 }
 
 /////////////////////////////////////////////////////////////////

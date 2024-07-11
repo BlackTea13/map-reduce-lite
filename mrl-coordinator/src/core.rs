@@ -1,21 +1,21 @@
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
 
-use tokio::sync::{Mutex, Notify};
+use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
 use tracing::info;
 
-use coordinator::*;
 pub use coordinator::coordinator_server::{Coordinator, CoordinatorServer};
-pub use worker::{AckRequest, ReceivedWorkRequest, worker_client::WorkerClient};
+use coordinator::*;
+pub use worker::{worker_client::WorkerClient, AckRequest, ReceivedWorkRequest};
 
+use crate::jobs::{Job, JobQueue};
+use crate::minio::{Client, ClientConfig};
+use crate::worker_info::WorkerID;
 use crate::{
     jobs,
     worker_info::{Worker, WorkerState},
     worker_registry::WorkerRegistry,
 };
-use crate::jobs::{Job, JobQueue};
-use crate::minio::{Client, ClientConfig};
-use crate::worker_info::WorkerID;
 
 pub mod coordinator {
     tonic::include_proto!("coordinator");
@@ -40,7 +40,6 @@ pub struct MRCoordinator {
     jobs: VecDeque<jobs::Job>,
     worker_registry: Arc<Mutex<WorkerRegistry>>,
     job_queue: Arc<Mutex<JobQueue>>,
-    job_queue_notifier: Arc<Notify>,
 }
 
 impl MRCoordinator {
@@ -50,7 +49,6 @@ impl MRCoordinator {
             jobs: VecDeque::new(),
             worker_registry: Arc::new(Mutex::new(WorkerRegistry::default())),
             job_queue: Arc::new(Mutex::new(JobQueue::new())),
-            job_queue_notifier: Arc::new(Notify::new()),
         }
     }
 
@@ -60,9 +58,6 @@ impl MRCoordinator {
 
     pub fn clone_job_queue(&self) -> Arc<Mutex<JobQueue>> {
         self.job_queue.clone()
-    }
-    pub fn clone_job_queue_notifier(&self) -> Arc<Notify> {
-        self.job_queue_notifier.clone()
     }
 
     pub async fn get_job_queue(&self) -> tokio::sync::MutexGuard<'_, JobQueue> {
@@ -229,7 +224,6 @@ impl Coordinator for MRCoordinator {
             // Add job to the queue.
             let mut job_queue = self.get_job_queue().await;
             job_queue.push_job(job.clone());
-            self.job_queue_notifier.notify_one();
         }
 
         let reply = AddJobResponse { success: true };

@@ -143,6 +143,9 @@ async fn interrupt_all_workers(registry: Arc<Mutex<WorkerRegistry>>, job: &mut J
     let worker_registry = registry.lock().await;
     for worker_id in workers {
         let request = Request::new(InterruptWorkerRequest {});
+        if !worker_registry.worker_valid(*worker_id) {
+            continue;
+        }
         let worker = worker_registry.get_worker(*worker_id).unwrap();
         let mut worker_client = worker.client.clone();
         let _ = worker_client.interrupt_worker(request).await;

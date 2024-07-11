@@ -140,6 +140,10 @@ impl WorkerRegistry {
         self.worker_list.get(index)
     }
 
+    pub fn worker_valid(&self, worker_id: WorkerID) -> bool {
+        self.worker_vendor.worker_valid(worker_id)
+    }
+
     /// Get worker from registry based on worker_id mutable
     pub fn get_worker_mut(&mut self, worker_id: WorkerID) -> Option<&mut WorkerInfo> {
         let index = Worker::get_worker_index(worker_id) as usize;

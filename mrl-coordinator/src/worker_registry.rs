@@ -134,6 +134,7 @@ impl WorkerRegistry {
     }
 
     /// Get worker from registry based on worker_id
+    /// note: this function does not care whether the worker is valid or invalid
     pub fn get_worker(&self, worker_id: WorkerID) -> Option<&WorkerInfo> {
         let index = Worker::get_worker_index(worker_id) as usize;
         self.worker_list.get(index)

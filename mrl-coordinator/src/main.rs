@@ -1,13 +1,16 @@
 use clap::Parser;
 use tonic::transport::Server;
+use tonic::Request;
 use tracing::info;
 
-use crate::core::worker::KillWorkerRequest;
 use args::Args;
 use common::minio::{self, Client};
 use core::{CoordinatorServer, MRCoordinator};
 use job_queue::process_job_queue;
-use tonic::Request;
+
+use crate::core::worker::KillWorkerRequest;
+use crate::job_queue::update_job_state;
+use crate::jobs::JobState;
 
 mod args;
 
@@ -67,7 +70,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             match result {
                 Ok(_) => info!(" - Task handled"),
-                Err(e) => info!(" - {}", e),
+                Err(e) => {
+                    update_job_state(job_queue.clone(), JobState::Failed).await;
+                    info!(" - {}", e)
+                }
             }
         }
     });

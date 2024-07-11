@@ -10,6 +10,7 @@ use bytes::Bytes;
 use bytesize::MB;
 use ext_sort::{buffer::LimitedBufferBuilder, ExternalSorter, ExternalSorterBuilder};
 use glob::glob;
+use rand::Rng;
 use tracing::error;
 use walkdir::WalkDir;
 
@@ -45,8 +46,6 @@ pub fn external_sort(filename: &str) -> String {
 
     output_file_name
 }
-
-use rand::Rng;
 
 pub async fn perform_reduce(
     request: ReduceJobRequest,

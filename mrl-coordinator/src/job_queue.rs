@@ -2,12 +2,14 @@
 // if you wish to change this and refactor it into a struct, feel free to do so.
 // - Appy
 
-use anyhow::anyhow;
 use std::sync::Arc;
 use std::time::Duration;
+
+use anyhow::anyhow;
 use tokio::select;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
+use tokio_util::task::TaskTracker;
 use tonic::Request;
 use tracing::info;
 
@@ -15,7 +17,7 @@ use common::minio::{path_to_bucket_key, Client};
 
 use crate::core::worker::{received_work_request::JobMessage, ReduceJobRequest};
 use crate::core::worker::{InterruptWorkerRequest, KillWorkerRequest, MapJobRequest};
-use crate::core::ReceivedWorkRequest;
+use crate::core::{AckRequest, ReceivedWorkRequest};
 use crate::jobs::JobState;
 use crate::worker_info::WorkerID;
 use crate::{
@@ -51,6 +53,7 @@ async fn _process_job_queue(
     //       phases, we have to clear job worker list and call this
     //       again. We can't just call this again because we might
     //       add duplicates into the job's worker ID list.
+    remove_unhealthy_workers(registry.clone()).await;
     assign_workers_to_job(registry.clone(), &client, job, job_queue.clone()).await?;
 
     // Handle the job in stages.
@@ -108,7 +111,29 @@ async fn _process_job_queue(
     Ok(())
 }
 
-async fn update_job_state(job_queue: Arc<Mutex<JobQueue>>, state: JobState) {
+pub async fn remove_unhealthy_workers(registry: Arc<Mutex<WorkerRegistry>>) {
+    let workers = registry.lock().await.get_workers();
+    let tracker = TaskTracker::new();
+
+    info!("Checking health of workers...");
+    for worker in workers {
+        let registry = registry.clone();
+        tracker.spawn(async move {
+            let mut client = worker.client.clone();
+            let message = AckRequest {
+                worker_id: worker.id as u32,
+            };
+            let is_ok = client.ack(message).await.is_ok();
+            if !is_ok {
+                registry.lock().await.delete_worker(worker.id);
+            }
+        });
+    }
+    tracker.close();
+    tracker.wait().await;
+}
+
+pub async fn update_job_state(job_queue: Arc<Mutex<JobQueue>>, state: JobState) {
     let mut job_queue = job_queue.lock().await;
     job_queue.update_current_job_state(state);
 }

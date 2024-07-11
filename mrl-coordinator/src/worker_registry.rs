@@ -125,9 +125,10 @@ impl WorkerRegistry {
         self.get_workers().len()
     }
 
-    pub fn get_workers(&self) -> Vec<&WorkerInfo> {
+    pub fn get_workers(&self) -> Vec<WorkerInfo> {
         self.worker_list
             .iter()
+            .cloned()
             .filter(|w| self.worker_vendor.worker_valid(w.id))
             .collect()
     }

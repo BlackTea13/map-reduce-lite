@@ -8,6 +8,7 @@ use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use bytes::{BufMut, Bytes, BytesMut};
 use dashmap::DashMap;
 use glob::glob;
+use rand::Rng;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 use tracing::{error, info};
@@ -51,8 +52,6 @@ pub async fn upload_objects(
 
     Ok(())
 }
-
-use rand::Rng;
 
 pub async fn perform_map(
     request: MapJobRequest,

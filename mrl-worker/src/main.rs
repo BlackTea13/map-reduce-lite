@@ -1,6 +1,6 @@
 use clap::Parser;
-use tokio::{fs, signal};
 use tokio::sync::mpsc;
+use tokio::{fs, signal};
 use tonic::transport::Server;
 use tracing::{error, info};
 use walkdir::WalkDir;

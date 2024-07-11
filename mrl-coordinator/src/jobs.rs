@@ -17,6 +17,9 @@ pub enum JobState {
 
     /// Job completed.
     Completed,
+
+    /// Job Failed
+    Failed,
 }
 
 /// A job context.

@@ -72,7 +72,6 @@ pub async fn perform_map(
         rng.gen()
     };
 
-
     info!("Received map task with workload `{workload}`");
 
     let workload = match workload::try_named(&workload) {

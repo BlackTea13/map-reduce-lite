@@ -11,18 +11,18 @@ use tokio::task::JoinSet;
 use tonic::Request;
 use tracing::info;
 
-use common::minio::{Client, path_to_bucket_key};
+use common::minio::{path_to_bucket_key, Client};
 
+use crate::core::worker::{received_work_request::JobMessage, ReduceJobRequest};
+use crate::core::worker::{InterruptWorkerRequest, KillWorkerRequest, MapJobRequest};
+use crate::core::ReceivedWorkRequest;
+use crate::jobs::JobState;
+use crate::worker_info::WorkerID;
 use crate::{
     jobs::{Job, JobQueue},
     worker_info::WorkerState,
     worker_registry::WorkerRegistry,
 };
-use crate::core::ReceivedWorkRequest;
-use crate::core::worker::{received_work_request::JobMessage, ReduceJobRequest};
-use crate::core::worker::{InterruptWorkerRequest, KillWorkerRequest, MapJobRequest};
-use crate::jobs::JobState;
-use crate::worker_info::WorkerID;
 
 pub async fn process_job_queue(
     client: Client,
@@ -64,7 +64,17 @@ async fn _process_job_queue(
     process_map_job(&client, registry.clone(), job).await?;
 
     // Wait for workers to be complete.
-    monitor_workers(&client, registry.clone(), job, WorkerState::Mapping).await?;
+    if monitor_workers(&client, registry.clone(), job, WorkerState::Mapping)
+        .await
+        .is_err()
+    {
+        update_job_state(job_queue.clone(), JobState::Failed).await;
+        interrupt_all_workers(registry.clone(), job).await;
+        client.delete_path(&bucket_out, &output_path).await?;
+        return Ok(());
+    } else {
+        info!("Monitoring for mapping done")
+    }
 
     // 2. Reduce stage.
     info!("Starting reduce stage");
@@ -72,18 +82,26 @@ async fn _process_job_queue(
     process_reduce_job(&client, registry.clone(), job).await?;
 
     // Wait for workers to be complete.
-    monitor_workers(&client, registry.clone(), job, WorkerState::Reducing).await?;
+    if monitor_workers(&client, registry.clone(), job, WorkerState::Reducing)
+        .await
+        .is_err()
+    {
+        update_job_state(job_queue.clone(), JobState::Failed).await;
+        interrupt_all_workers(registry.clone(), job).await;
+        client.delete_path(&bucket_out, &output_path).await?;
+    } else {
+        info!("Monitoring for reducing done");
 
-    // cleanup temp files in S3
-    // info!("{}", output_path);
-    let temp_path = match output_path.as_str() {
-        "" => "temp",
-        _ => &format!("{}/temp", output_path),
-    };
+        // cleanup temp files in S3
+        let temp_path = match output_path.as_str() {
+            "" => "temp",
+            _ => &format!("{}/temp", output_path),
+        };
 
-    client.delete_path(&bucket_out, temp_path).await?;
+        client.delete_path(&bucket_out, temp_path).await?;
 
-    update_job_state(job_queue.clone(), JobState::Completed).await;
+        update_job_state(job_queue.clone(), JobState::Completed).await;
+    }
 
     Ok(())
 }
@@ -91,6 +109,17 @@ async fn _process_job_queue(
 async fn update_job_state(job_queue: Arc<Mutex<JobQueue>>, state: JobState) {
     let mut job_queue = job_queue.lock().await;
     job_queue.update_current_job_state(state);
+}
+
+async fn interrupt_all_workers(registry: Arc<Mutex<WorkerRegistry>>, job: &mut Job) {
+    let workers = job.get_workers();
+    let worker_registry = registry.lock().await;
+    for worker_id in workers {
+        let request = Request::new(InterruptWorkerRequest {});
+        let worker = worker_registry.get_worker(*worker_id).unwrap();
+        let mut worker_client = worker.client.clone();
+        let _ = worker_client.interrupt_worker(request).await;
+    }
 }
 
 async fn assign_workers_to_job(
@@ -295,9 +324,7 @@ async fn monitor_workers(
         },
         _ = tokio::time::sleep(tokio::time::Duration::from_secs(timeout as u64)) => {
             info!("Stragglers detected...");
-            let _ = handling_stragglers(client,registry.clone(), job, current_state, timeout).await;
-
-            Ok(())
+            Ok(handling_stragglers(client,registry.clone(), job, current_state, timeout).await?)
         }
     }
 }
@@ -323,119 +350,125 @@ async fn handling_stragglers(
             .collect()
     };
 
-    let mut set = JoinSet::new();
+    if stragglers.len() == job.get_workers().len() {
+        Err(Box::from(anyhow!(
+            "All workers were stragglers.. Cancelling job"
+        )))
+    } else {
+        let mut set = JoinSet::new();
 
-    let mut index = 0;
-    while index < stragglers.len() {
-        let straggler_id = stragglers[index];
-        let job_clone = job.clone();
+        let mut index = 0;
+        while index < stragglers.len() {
+            let straggler_id = stragglers[index];
+            let job_clone = job.clone();
 
-        let free_worker_id = {
-            let registry_lock = registry.lock().await;
-            let free_workers: Vec<WorkerID> = job_clone
-                .get_workers()
-                .iter()
-                .filter(|&&worker_id| {
-                    matches!(
-                        registry_lock.get_worker_state(worker_id),
-                        Some(WorkerState::Free)
-                    )
-                })
-                .cloned()
-                .collect();
+            let free_worker_id = {
+                let registry_lock = registry.lock().await;
+                let free_workers: Vec<WorkerID> = job_clone
+                    .get_workers()
+                    .iter()
+                    .filter(|&&worker_id| {
+                        matches!(
+                            registry_lock.get_worker_state(worker_id),
+                            Some(WorkerState::Free)
+                        )
+                    })
+                    .cloned()
+                    .collect();
 
-            free_workers.first().cloned()
-        };
+                free_workers.first().cloned()
+            };
 
-        if let Some(free_worker_id) = free_worker_id {
-            if free_worker_id != straggler_id {
-                let request = {
-                    let mut registry_lock = registry.lock().await;
-                    let worker = registry_lock.get_worker_mut(free_worker_id).unwrap();
-                    worker.set_state(current_state);
+            if let Some(free_worker_id) = free_worker_id {
+                if free_worker_id != straggler_id {
+                    let request = {
+                        let mut registry_lock = registry.lock().await;
+                        let worker = registry_lock.get_worker_mut(free_worker_id).unwrap();
+                        worker.set_state(current_state);
 
-                    match current_state {
-                        WorkerState::Mapping => {
-                            let straggler_input =
-                                job_clone.get_worker_map_files(&straggler_id).unwrap();
-                            job.set_worker_map_files(free_worker_id, straggler_input.clone());
-                            create_straggler_request(
-                                job,
-                                current_state,
-                                straggler_id,
-                                straggler_input,
-                                None,
-                            )
-                            .await
-                        }
-                        WorkerState::Reducing => {
-                            let (reduce_ids, straggler_input) =
-                                job_clone.get_worker_reduce_files(&straggler_id).unwrap();
-                            job.set_worker_reduce_files(
-                                free_worker_id,
-                                reduce_ids.clone(),
-                                straggler_input.clone(),
-                            );
-                            create_straggler_request(
-                                job,
-                                current_state,
-                                straggler_id,
-                                straggler_input,
-                                Some(reduce_ids.clone()),
-                            )
-                            .await
-                        }
-                        // Can't reach this case as the only states that will be passed in the function is Map or Reduce
-                        _ => unreachable!(),
-                    }?
-                };
+                        match current_state {
+                            WorkerState::Mapping => {
+                                let straggler_input =
+                                    job_clone.get_worker_map_files(&straggler_id).unwrap();
+                                job.set_worker_map_files(free_worker_id, straggler_input.clone());
+                                create_straggler_request(
+                                    job,
+                                    current_state,
+                                    straggler_id,
+                                    straggler_input,
+                                    None,
+                                )
+                                .await
+                            }
+                            WorkerState::Reducing => {
+                                let (reduce_ids, straggler_input) =
+                                    job_clone.get_worker_reduce_files(&straggler_id).unwrap();
+                                job.set_worker_reduce_files(
+                                    free_worker_id,
+                                    reduce_ids.clone(),
+                                    straggler_input.clone(),
+                                );
+                                create_straggler_request(
+                                    job,
+                                    current_state,
+                                    straggler_id,
+                                    straggler_input,
+                                    Some(reduce_ids.clone()),
+                                )
+                                .await
+                            }
+                            // Can't reach this case as the only states that will be passed in the function is Map or Reduce
+                            _ => unreachable!(),
+                        }?
+                    };
 
-                {
-                    let mut registry_lock = registry.lock().await;
-                    let worker = registry_lock.get_worker_mut(free_worker_id).unwrap();
-                    worker.client.received_work(request).await?;
+                    {
+                        let mut registry_lock = registry.lock().await;
+                        let worker = registry_lock.get_worker_mut(free_worker_id).unwrap();
+                        worker.client.received_work(request).await?;
+                    }
+
+                    let client_clone = client.clone();
+                    let registry_clone = registry.clone();
+                    let straggler_id_clone = straggler_id;
+                    let free_worker_id_clone = free_worker_id;
+                    let mut job_clone = job.clone();
+
+                    info!(
+                        "Commencing a race between free {} and straggler {}",
+                        free_worker_id_clone, straggler_id_clone
+                    );
+
+                    set.spawn(async move {
+                        straggler_vs_free_worker(
+                            &client_clone,
+                            straggler_id_clone,
+                            free_worker_id_clone,
+                            registry_clone,
+                            &mut job_clone,
+                            timeout,
+                            current_state,
+                        )
+                        .await
+                    });
                 }
 
-                let client_clone = client.clone();
-                let registry_clone = registry.clone();
-                let straggler_id_clone = straggler_id;
-                let free_worker_id_clone = free_worker_id;
-                let mut job_clone = job.clone();
-
-                info!(
-                    "Commencing a race between free {} and straggler {}",
-                    free_worker_id_clone, straggler_id_clone
-                );
-
-                set.spawn(async move {
-                    straggler_vs_free_worker(
-                        &client_clone,
-                        straggler_id_clone,
-                        free_worker_id_clone,
-                        registry_clone,
-                        &mut job_clone,
-                        timeout,
-                        current_state,
-                    )
-                    .await
-                });
+                index += 1;
+            } else {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
-
-            index += 1;
-        } else {
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
-    }
 
-    while let Some(res) = set.join_next().await {
-        if let Some(worker_id) = res?? {
-            // Has room for improvement as this operation can be expensive so instead
-            // we can explore invalidating the worker with a flag instead
-            job.remove_worker(&worker_id);
+        while let Some(res) = set.join_next().await {
+            if let Some(worker_id) = res?? {
+                // Has room for improvement as this operation can be expensive so instead
+                // we can explore invalidating the worker with a flag instead
+                job.remove_worker(&worker_id);
+            }
         }
-    }
 
-    Ok(())
+        Ok(())
+    }
 }
 
 async fn create_straggler_request(
@@ -567,8 +600,7 @@ async fn straggler_vs_free_worker(
             None
         },
         _ = tokio::time::sleep(tokio::time::Duration::from_secs(timeout as u64)) => {
-            info!("Timeout waiting for workers to become free");
-            None
+            return Err(Box::from(anyhow!("No one finished the race.. Cancelling job...")))
         },
     };
 

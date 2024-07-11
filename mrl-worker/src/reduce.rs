@@ -1,11 +1,11 @@
 use std::fs;
 use std::fs::File;
-use std::io::{self, prelude::*};
 use std::io::BufReader;
+use std::io::{self, prelude::*};
 use std::path::Path;
 
 use anyhow::{anyhow, Error};
-use base64::{Engine as _, engine::general_purpose::URL_SAFE};
+use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use bytes::Bytes;
 use bytesize::MB;
 use ext_sort::{buffer::LimitedBufferBuilder, ExternalSorter, ExternalSorterBuilder};
@@ -48,7 +48,11 @@ pub fn external_sort(filename: &str) -> String {
 
 use rand::Rng;
 
-pub async fn perform_reduce(request: ReduceJobRequest, client: &Client, id: u32) -> Result<(), Error> {
+pub async fn perform_reduce(
+    request: ReduceJobRequest,
+    client: &Client,
+    id: u32,
+) -> Result<(), Error> {
     let request_clone = request.clone();
     let reduce_ids = request_clone.reduce_ids;
     let workload = request_clone.workload;
@@ -87,7 +91,7 @@ pub async fn perform_reduce_per_id(
     client: &Client,
     reduce_id: u32,
     rand: u8,
-    id: u32
+    id: u32,
 ) -> Result<(), Error> {
     let aux = request.aux;
     let bucket = request.bucket;
@@ -112,7 +116,11 @@ pub async fn perform_reduce_per_id(
         }
     };
 
-    let target_dir = format!("{WORKING_DIR_REDUCE}mrl-{}-{}-{rand}", id & 0xFFFF, reduce_id);
+    let target_dir = format!(
+        "{WORKING_DIR_REDUCE}mrl-{}-{}-{rand}",
+        id & 0xFFFF,
+        reduce_id
+    );
     let target_path = Path::new(&target_dir);
     if !target_path.exists() {
         fs::create_dir_all(target_path)?;

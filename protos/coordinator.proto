@@ -55,6 +55,8 @@ message WorkerDoneRequest {
 }
 
 message WorkerDoneResponse {
+  // True if worker completed work successfully
+  // False if worker encounters an error
   bool success = 1;
 }
 

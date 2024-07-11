@@ -137,7 +137,7 @@ impl Client {
 
         for source_object in source_objects {
             let destination_key = format!(
-                "{}/{}",
+                "{}{}",
                 destination_path,
                 source_object
                     .trim_start_matches(source_path)
@@ -250,27 +250,6 @@ impl Client {
 
     pub async fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
         self.client.delete_bucket().bucket(bucket).send().await?;
-        Ok(())
-    }
-
-    pub async fn glob_download(
-        &self,
-        bucket: &str,
-        glob_pattern: &str,
-        dir: &str,
-    ) -> Result<(), Error> {
-        let glob = Glob::new(glob_pattern).expect("invalid glob pattern");
-        let glob_matcher = glob.compile_matcher();
-        let objects = self.client.list_objects_v2().bucket(bucket).send().await?;
-
-        for object in objects.contents.unwrap() {
-            let key = object.key.as_ref().unwrap();
-
-            if glob_matcher.is_match(key) {
-                self.download_object(bucket, key, dir).await?;
-            }
-        }
-
         Ok(())
     }
 

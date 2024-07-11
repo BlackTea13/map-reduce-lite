@@ -138,7 +138,6 @@ impl WorkerInfo {
 
         tokio::task::spawn(async move {
             let mut client = WorkerClient::connect(format!("http://{}", addr).to_string()).await;
-
             while client.is_err() {
                 client = WorkerClient::connect(format!("http://{}", addr).to_string()).await;
             }

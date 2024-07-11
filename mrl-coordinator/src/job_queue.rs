@@ -2,6 +2,7 @@
 // if you wish to change this and refactor it into a struct, feel free to do so.
 // - Appy
 
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -10,12 +11,14 @@ use tokio::select;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 use tokio_util::task::TaskTracker;
-use tonic::Request;
-use tracing::info;
+use tonic::{IntoRequest, Request, Response, Status};
+use tracing::{error, info};
 
 use common::minio::{path_to_bucket_key, Client};
 
-use crate::core::worker::{received_work_request::JobMessage, ReduceJobRequest};
+use crate::core::worker::{
+    received_work_request::JobMessage, KillWorkerResponse, ReduceJobRequest,
+};
 use crate::core::worker::{InterruptWorkerRequest, KillWorkerRequest, MapJobRequest};
 use crate::core::{AckRequest, ReceivedWorkRequest};
 use crate::jobs::JobState;
@@ -46,6 +49,11 @@ async fn _process_job_queue(
     registry: Arc<Mutex<WorkerRegistry>>,
     job_queue: Arc<Mutex<JobQueue>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if check_invalid_output_path(job.get_output_path()) {
+        update_job_state(job_queue.clone(), JobState::Failed).await;
+        return Err("invalid job output path, key cannot be empty".into());
+    }
+
     // Collect workers and assign them to the job.
     // NOTE: Right now, workers can't join while job is inflight.
     //
@@ -67,6 +75,7 @@ async fn _process_job_queue(
     process_map_job(&client, registry.clone(), job).await?;
 
     // Wait for workers to be complete.
+    info!("Monitoring mappers");
     if monitor_workers(&client, registry.clone(), job, WorkerState::Mapping)
         .await
         .is_err()
@@ -77,7 +86,7 @@ async fn _process_job_queue(
         client.delete_path(&bucket_out, &output_path).await?;
         return Ok(());
     } else {
-        info!("Monitoring for mapping done")
+        info!("Monitoring for mapping done");
     }
 
     // 2. Reduce stage.
@@ -86,6 +95,7 @@ async fn _process_job_queue(
     process_reduce_job(&client, registry.clone(), job).await?;
 
     // Wait for workers to be complete.
+    info!("Monitoring reducers...");
     if monitor_workers(&client, registry.clone(), job, WorkerState::Reducing)
         .await
         .is_err()
@@ -111,6 +121,10 @@ async fn _process_job_queue(
     Ok(())
 }
 
+fn check_invalid_output_path(path: &String) -> bool {
+    path_to_bucket_key(path).is_ok_and(|bucket_key| bucket_key.key.is_empty())
+}
+
 pub async fn remove_unhealthy_workers(registry: Arc<Mutex<WorkerRegistry>>) {
     let workers = registry.lock().await.get_workers();
     let tracker = TaskTracker::new();
@@ -123,8 +137,13 @@ pub async fn remove_unhealthy_workers(registry: Arc<Mutex<WorkerRegistry>>) {
             let message = AckRequest {
                 worker_id: worker.id as u32,
             };
-            let is_ok = client.ack(message).await.is_ok();
+            let grpc_request = call_grpc_with_timeout(client.ack(message), Duration::from_secs(5));
+            let is_ok = grpc_request.await.is_ok();
             if !is_ok {
+                info!(
+                    "Found unhealthy workers, deleting worker {} from the registry...",
+                    worker.id
+                );
                 registry.lock().await.delete_worker(worker.id);
             }
         });
@@ -148,7 +167,9 @@ async fn interrupt_all_workers(registry: Arc<Mutex<WorkerRegistry>>, job: &mut J
         }
         let worker = worker_registry.get_worker(*worker_id).unwrap();
         let mut worker_client = worker.client.clone();
-        let _ = worker_client.interrupt_worker(request).await;
+
+        let grpc_call = worker_client.interrupt_worker(request);
+        let _ = call_grpc_with_timeout(grpc_call, Duration::from_secs(3)).await;
     }
 }
 
@@ -283,8 +304,6 @@ async fn process_reduce_job(
         index += 1;
     }
 
-    info!("{:?}", worker_reduce_ids);
-
     for (index, worker) in workers.iter().enumerate() {
         let registry = registry.lock().await;
         let worker = registry.get_worker(*worker).unwrap();
@@ -405,6 +424,7 @@ async fn handling_stragglers(
     };
 
     if stragglers.len() == job.get_workers().len() {
+        error!("All workers were stragglers.. Cancelling job");
         Err(Box::from(anyhow!(
             "All workers were stragglers.. Cancelling job"
         )))
@@ -514,7 +534,17 @@ async fn handling_stragglers(
         }
 
         while let Some(res) = set.join_next().await {
-            if let Some(worker_id) = res?? {
+            let res = res.unwrap_or_else(|e| {
+                error!("encountered error during rescheduling: {}", e);
+                Err(e.into())
+            });
+
+            let res = res.unwrap_or_else(|e| {
+                error!("encountered error during rescheduling: {}", e);
+                None
+            });
+
+            if let Some(worker_id) = res {
                 // Has room for improvement as this operation can be expensive so instead
                 // we can explore invalidating the worker with a flag instead
                 job.remove_worker(&worker_id);
@@ -590,7 +620,7 @@ async fn straggler_vs_free_worker(
 
     let (key_prefix, dest_path) = match current_state {
         WorkerState::Mapping => ("temp/straggler_copy/temp", "temp"),
-        WorkerState::Reducing => ("reduce/straggler_copy", "/"),
+        WorkerState::Reducing => ("reduce/straggler_copy", ""),
         // Can't reach this case as the only states that will be passed in the function is Map or Reduce
         _ => unreachable!(),
     };
@@ -609,7 +639,10 @@ async fn straggler_vs_free_worker(
 
             let mut worker_client = worker.client.clone();
 
-            worker_client.kill_worker(request).await?;
+            let grpc_call = worker_client.kill_worker(request);
+            if call_grpc_with_timeout(grpc_call, Duration::from_secs(3)).await.is_err() {
+                registry.lock().await.delete_worker(worker.id);
+            };
 
             // Wait for object to exist because of S3's upload latency
             // Ref: https://stackoverflow.com/questions/8856316/amazon-s3-how-to-deal-with-the-delay-from-upload-to-object-availability
@@ -619,13 +652,13 @@ async fn straggler_vs_free_worker(
                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             }
 
-            client.move_objects(&bucket_out,path,format!("{}/{}", &out_key, &dest_path).as_str()).await?;
+            let out_path = format!("{}/{}", &out_key, &dest_path);
+            client.move_objects(&bucket_out, path, &out_path).await?;
 
             Some(straggler_id)
-
         },
         _ = wait_for_worker_to_become_free(registry.clone(), straggler_id) => {
-
+            info!("stragglerId: {}", straggler_id);
             let worker = {
                 let registry_lock = registry.lock().await;
                 registry_lock.get_worker(straggler_id).ok_or(anyhow!("Failed to find worker"))?.clone()
@@ -659,6 +692,23 @@ async fn straggler_vs_free_worker(
     };
 
     Ok(result)
+}
+
+async fn call_grpc_with_timeout<T: Clone + PartialEq + ::prost::Message>(
+    request: impl Future<Output = Result<Response<T>, Status>> + Sized,
+    duration: Duration,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    tokio::select! {
+        result = request => {
+            match result {
+                Ok(_) => Ok(()),
+                Err(e) => Err(e.into()),
+            }
+        },
+        _ = tokio::time::sleep(duration) => {
+            Err("tried to gRPC call to worker but request timed out".into())
+        }
+    }
 }
 
 async fn wait_for_worker_to_become_free(registry: Arc<Mutex<WorkerRegistry>>, worker_id: WorkerID) {
